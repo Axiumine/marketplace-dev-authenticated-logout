@@ -1,0 +1,40 @@
+PORT=4030
+DOMAIN=xxx.tdweb.lan
+
+REDIS_IS_CLUSTER=1
+REDIS_DB1_HOST=db1
+REDIS_DB2_HOST=db2
+REDIS_DB3_HOST=db3
+REDIS_DB1_PORT=6379
+REDIS_DB2_PORT=6379
+REDIS_DB3_PORT=6379
+REDIS_USERNAME=
+REDIS_PASSWORD=
+REDIS_KEY=marketplaceDev:
+
+
+NODE_ENV=development
+
+
+UPLOAD_DIR=/media/xxx
+MAX_IMAGE_MB=20
+MAX_VIDEO_MB=100
+
+SOCKETLABS_SERVER_ID=111111
+SOCKETLABS_SERVER_APIKEY=xxxxxx
+REDIRECT_DOMAIN=https://xxxx.tdweb.lan
+
+HIT_STATS=false
+INTROSPECTION_CODE='xxx'
+
+KEYGRIP_KEY_1="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+KEYGRIP_KEY_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+DSN="https://xxxxxxxxxxxxxx@bugsink.lan/1"
+
+
+# ── Qodana Ultimate Plus ──────────────────────────────────────────────────────
+# Project token from https://qodana.cloud (project settings → token).
+# Required by the local pre-merge gate to run the paid `jetbrains/qodana-js:2026.2`
+# linter and to enable coverage / license-audit / taint inspections.
+QODANA_TOKEN=

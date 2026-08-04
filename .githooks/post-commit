@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# post-commit: re-index the repo with GitNexus after every commit so the code
+# graph stays fresh without a manual `analyze`.
+#
+# --no-stats drops the volatile file/symbol counts from the generated
+# AGENTS.md / CLAUDE.md guidance, keeping those files byte-identical across runs
+# so re-indexing never dirties the working tree. It mirrors the committed
+# .gitnexusrc {"analyze":{"noStats":true}} and is passed explicitly so the
+# behaviour holds even where that rc file is absent.
+#
+# This runs AFTER the commit is already recorded: it can never fail the commit,
+# so every path is guarded and the hook always exits 0. Skip with GITNEXUS_SKIP=1.
+
+set -uo pipefail
+
+[[ "${GITNEXUS_SKIP:-0}" == "1" ]] && exit 0
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$root" || exit 0
+
+mkdir -p "$root/.gitnexus" 2>/dev/null || true   # .gitnexus/ is gitignored index storage
+log="$root/.gitnexus/last-analyze.log"
+
+run() {
+	# Prefer the repo-pinned runner (auto-selects an available engine); fall back to
+	# a global install, then npx without a network install. Never touch the network
+	# implicitly and never block the commit flow.
+	if [[ -f .gitnexus/run.cjs ]]; then
+		node .gitnexus/run.cjs analyze --no-stats
+	elif command -v gitnexus >/dev/null 2>&1; then
+		gitnexus analyze --no-stats
+	else
+		npx --no-install gitnexus analyze --no-stats
+	fi
+}
+
+if run >"$log" 2>&1; then
+	echo "gitnexus: reindexed (--no-stats) → .gitnexus/last-analyze.log"
+else
+	echo "gitnexus: analyze skipped/failed (non-fatal) → .gitnexus/last-analyze.log" >&2
+fi
+
+exit 0

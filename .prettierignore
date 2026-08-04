@@ -1,0 +1,24 @@
+# Dependencies and build output — not ours to format.
+node_modules/
+dist/
+coverage/
+reports/
+.stryker-tmp/
+
+# The package manager owns these; reformatting them fights it on every install.
+package.json
+package-lock.json
+yarn.lock
+
+# Vendored third-party semgrep rules, kept exactly as shipped so refreshing them stays a clean diff.
+semgrep/vendor/
+
+# Written by `gitnexus analyze` on every run. .claude/skills/* are symlinks into .agents/, so
+# formatting them would write straight through the link and dirty a second repo.
+.claude/
+.gitnexus/
+
+# Markdown is excluded on purpose, not by oversight: `proseWrap: "never"` collapses every
+# hand-wrapped paragraph in CLAUDE.md, COVERAGE.md and semgrep/README.md onto a single line. The
+# prose in this repo is wrapped deliberately and is meant to stay readable in a diff.
+*.md

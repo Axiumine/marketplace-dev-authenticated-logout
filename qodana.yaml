@@ -1,0 +1,163 @@
+#-------------------------------------------------------------------------------#
+#               Qodana analysis is configured by qodana.yaml file               #
+#             https://www.jetbrains.com/help/qodana/qodana-yaml.html            #
+#-------------------------------------------------------------------------------#
+version: '1.0'
+
+# Full Ultimate inspection set: code quality + SAST / taint dataflow.
+# Ultimate & Ultimate Plus features unlock via QODANA_TOKEN (see .env, run via ./qodana.sh).
+profile:
+  name: qodana.recommended
+
+# Qodana for JS/TS — Ultimate-tier linter (no community JS variant exists).
+# Docker images go under `image:`; `linter:` is for the linter *name* and makes the
+# CLI warn "has image value, please use --image param".
+# Tag must be a real image tag: only 2026.2, 2026.1, 2025.3, 2025.2, latest, and
+# the -eap variants are published.
+# 2026.1.x are *CLI* versions (the CLI advertises them in its own update banner) and
+# do NOT exist as image tags — pinning one makes the pull fail and the scan never run.
+image: jetbrains/qodana-js:2026.2
+
+# ── SCA: third-party license audit (Ultimate Plus) ────────────────────────────
+# Scans npm/Yarn deps and surfaces license conflicts as problems. The project is
+# proprietary (package.json "UNLICENSED"), so Qodana's default compatibility
+# matrix already flags copyleft dependencies. Tighten per-project below if needed.
+raiseLicenseProblems: true
+
+# `keys` is THIS project's license, `allowed` the dependency licenses accepted
+# against it. The default matrix for a proprietary project flags every copyleft
+# dep as a Critical — correct for shipped software, wrong here: these services are
+# never distributed, they run on our own hosts behind nginx, so the GPL's
+# distribution trigger is never pulled. Accepted by the project owner.
+#
+# Deliberately NOT `dependencyIgnores: - name: "@axiumine/koa-utils"`. That key
+# drops a package from the whole SCA pass, so a future CVE in it would be silenced
+# along with the license noise. This suppresses only the license verdict and keeps
+# vulnerable-dependency scanning fully armed.
+#
+# `keys` must carry the key Qodana derives, NOT the package.json string: it maps
+# "UNLICENSED" to PROPRIETARY-LICENSE, and the finding text says so verbatim —
+# "…is in the prohibited licenses list with project license 'PROPRIETARY-LICENSE'".
+# Putting "UNLICENSED" here matches no project and the rule silently does nothing.
+#
+# MPL-2.0 covers lightningcss, which arrives only as `vitest -> vite -> lightningcss`
+# (`yarn why` confirms that single path). It is a build-time devDependency: never
+# imported by src/, never bundled, never present in dist/ or on a running host.
+# It raises no *problem* — the SCA verdict is drawn from production dependencies —
+# but Qodana Cloud's license inventory lists every resolved dependency, so without
+# this entry MPL-2.0 sits there as the one unaccounted license and reads like an
+# open question. It is not: MPL is per-file copyleft and triggers on distributing
+# *modified* covered files, which we neither modify nor distribute.
+#
+# CC0-1.0 covers type-fest, whose package.json declares "(MIT OR CC0-1.0)" — a dual
+# license, ours to choose from. Qodana records BOTH keys and checks the CC0 one against
+# the PROPRIETARY-LICENSE ruleset, where CC0-1.0 appears neither in `allowed` nor in
+# `prohibited`: the verdict is "Uncategorized". The CLI does not count that as a problem
+# — every local scan reported 0 — but Qodana Cloud counts it in the license inventory as
+# one suspicious license, which is why the terminal looked clean while the dashboard did
+# not. CC0-1.0 is a public-domain dedication: it grants strictly more than MIT and asks
+# nothing back, so accepting it adds no obligation.
+#
+# The copy that raised the finding is gone: it was type-fest@0.10.0 under `got`, and `got`
+# arrived only under `metaget` — a production dependency imported nowhere in this codebase,
+# now dropped from package.json. What is left, and only in the services that install
+# mongoose-tsgen, is type-fest@0.21.3 under `mongoose-tsgen -> @oclif/core -> ansi-escapes`
+# (`yarn why` confirms that single path): a devDependency, never imported by src/, never
+# bundled, carrying the same dual license. The entry is kept in all seven services rather
+# than pruned per-service, so a dual-licensed package hoisted here later does not reopen it.
+licenseRules:
+  - keys: ['PROPRIETARY-LICENSE']
+    allowed: ['GPL-3.0-or-later', 'GPL-3.0-only', 'LGPL-3.0-or-later', 'LGPL-3.0-only', 'MPL-2.0', 'CC0-1.0']
+
+# No dependencyOverrides here. There was one, for humanize-number 0.0.2, whose
+# package.json carries no license field at all — it had to be declared MIT by
+# hand on the authority of a "## License" heading in its 2014 Readme. That is
+# the weakest kind of entry: a human claim standing in for machine-readable
+# metadata, unverifiable by the tool that trusts it.
+#
+# It is gone because the package is gone. It only ever arrived transitively via
+# koa-logger, which every service declared and none imported — see the commit
+# that dropped it. Deleting the dependency beat annotating it.
+#
+# Note the sibling services still carry an override for our own marketplace-common,
+# plus PROPRIETARY-LICENSE in their `allowed` list. Both are absent here on
+# purpose: this service has no marketplace-common dependency.
+
+# Vulnerable-dependency check (SCA) and taint/SAST run automatically as part of
+# the recommended profile on the Ultimate linter — no extra key required.
+
+# ── Quality gate: 100% test coverage required on every metric (see COVERAGE.md) ─
+# If coverage is below 100%, the fix is to add tests or delete dead code until it
+# returns to 100% — never lower these numbers.
+#
+# severityThresholds is what makes the *inspection* results binding. Without it the
+# scan prints "✗ Found N new problems" and still exits 0, so the coverage condition
+# below is the only thing that could fail a run — and vitest already enforces that,
+# leaving the scan with nothing of its own to block on. Verified in marketplace-common:
+# a run reporting a High JSVoidFunctionReturnValueUsed exited 0, and exited 255 once
+# these two keys were added.
+#
+# critical/high only. Moderate stays advisory on purpose: the standing DuplicatedCode
+# notes are test boilerplate the mutation gate needs spelled out explicitly, and
+# folding them into a shared helper to green a scan would weaken assertions to satisfy
+# a linter.
+failureConditions:
+  severityThresholds:
+    critical: 0
+    high: 0
+  testCoverageThresholds:
+    total: 100 # whole project
+    fresh: 100 # new / changed code
+
+#Enable inspections
+#include:
+#  - name: <SomeEnabledInspectionId>
+
+# ── Disabled inspections ──────────────────────────────────────────────────────
+# semgrep/vendor holds third-party semgrep rulesets, refreshed by its own
+# refresh.sh — not our code. secrets.yml is a catalogue of credential-detection
+# *patterns*, so it is full of example passwords and API keys by design, and
+# HardcodedPasswords reads those literals as real secrets (two Criticals, at
+# secrets.yml:618 and :2213). False positives on a file whose entire purpose is
+# to contain password-shaped strings.
+#
+# Scoped to the path, NOT disabled globally: a genuine hardcoded secret anywhere
+# in src/ must still fail the build. Do not widen this to the whole semgrep/
+# dir either — custom.yml is ours and should stay inspected.
+exclude:
+  - name: HardcodedPasswords
+    paths:
+      - semgrep/vendor
+
+  # ES6PreferShortImport wants `from '../../src/index.mts'` written as
+  # `from '../../src'`, dropping the "redundant" index filename. That advice is
+  # written for bundler-style resolution and is simply wrong for this project.
+  #
+  # Verified, not assumed — the shortened form was applied and the suite run:
+  #   Error: Cannot find module '/src' imported from test/integration/index.itest.mts
+  #   Test Files  1 failed | 6 passed (7)
+  # Node ESM has no directory imports (ERR_UNSUPPORTED_DIR_IMPORT) and nothing in
+  # the vitest resolver fills the gap here, so the "shorter" path resolves to
+  # nothing at all. The explicit filename is load-bearing.
+  #
+  # Re-verified on 2026-08-01 against a second file, because the scope below was
+  # wrong: it named `index.itest.mts` alone while every other integration test
+  # imports the entry point the same way, so `startFailure`, `shutdown` and
+  # `cibi` kept reporting. The failure is identical in all of them —
+  #   Error: Cannot find module '/src' imported from test/integration/shutdown.itest.mts
+  # — the repo's vitest resolver reduces the directory specifier to `/src` and
+  # finds nothing. That went unnoticed because the scan had no severity gate and
+  # exited 0 while printing the findings.
+  #
+  # Scoped to test/integration/, not disabled globally: if a genuinely shortenable
+  # import ever appears in src/, it must still be reported.
+  - name: ES6PreferShortImport
+    paths:
+      - test/integration
+
+#Execute shell command before Qodana execution (Applied in CI/CD pipeline)
+#bootstrap: sh ./prepare-qodana.sh
+
+#Install IDE plugins before Qodana execution (Applied in CI/CD pipeline)
+#plugins:
+#  - id: <plugin.id> #(plugin id can be found at https://plugins.jetbrains.com)

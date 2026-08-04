@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+# pre-commit — secret guard, then the lint, coverage and Qodana quality gates.
+#
+# Installed as a per-repo copy (not a symlink: nothing else can move out from
+# under it). Four independent checks, cheapest first:
+#   1. staged PATH looks like a secret file             -> block
+#   2. staged ADDED LINES contain a high-entropy secret -> block
+#   3. eslint or prettier is not clean                  -> block  (see below)
+#   4. coverage < 100% or Qodana finds a problem        -> block  (see below)
+#
+# Patterns are deliberately narrow enough that the committed `env` / `npmrc`
+# placeholder templates pass, and a line that is a self-declared placeholder
+# (`KEY=test-…`) is dropped before the value scan. Override a verified false
+# positive with:
+#   git commit --no-verify
+set -uo pipefail
+
+fail=0
+
+SECRET_PATH='(^|/)(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc(\.yml)?|\.netrc|\.pgpass|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json|service-account.*\.json)$|\.(pem|p12|pfx|jks)$'
+
+# Vendored secret-scanner rulesets legitimately contain example secret patterns.
+SKIP_PATH='(^|/)(semgrep/vendor|gitleaks|trufflehog|\.gitnexus)/'
+
+# High-entropy formats only. A placeholder (npm_xxxx, all-x, ${VAR}, empty) must
+# never match, or the guard gets disabled by the first false positive.
+SECRET_VALUE='npm_[A-Za-z0-9]{36}'
+SECRET_VALUE+='|_authToken[[:space:]]*=[[:space:]]*["'"'"']?([0-9a-f]{8}-[0-9a-f]{4}-|ey[A-Za-z0-9_-]{10,}\.)'
+SECRET_VALUE+='|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+SECRET_VALUE+='|KEYGRIP_KEY_[12][[:space:]]*=[[:space:]]*"[^x"]{40}'
+# dotenv style: KEY=<16+ chars>, at line start (a leading + from the diff is stripped first)
+SECRET_VALUE+='|^[[:space:]]*(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)=[^$x[:space:]][^[:space:]]{15,}'
+# code style: KEY = "<16+ chars>" — a quoted literal, never process.env.KEY
+SECRET_VALUE+='|(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)[[:space:]]*[:=][[:space:]]*["'"'"'][^$x"'"'"'][^"'"'"']{15,}["'"'"']'
+SECRET_VALUE+='|mongodb(\+srv)?://[^:/[:space:]]+:[^@[:space:]]{10,}@'
+
+# Declared-placeholder lines, dropped before the value scan: a whole line whose *only*
+# content is `KEY=test-…` / `KEY: 'test-…'` (test fixtures in vitest.config.mts and friends).
+# Anchored at both ends on purpose — it can never whitelist a secret that merely appears
+# somewhere inside a URI, an object literal or a longer expression, only a line that is
+# itself a self-declared placeholder assignment.
+PLACEHOLDER='^[[:space:]]*[A-Za-z_][A-Za-z_0-9]*[[:space:]]*[:=][[:space:]]*'
+PLACEHOLDER+='["'"'"']?(test|dummy|fake|sample|example|placeholder|changeme|your[-_])[A-Za-z_0-9:/.-]*["'"'"']?,?[[:space:]]*$'
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ev "$SKIP_PATH" || true)
+
+while IFS= read -r f; do
+	[ -n "$f" ] || continue
+	if printf '%s\n' "$f" | grep -Eq "$SECRET_PATH"; then
+		echo "pre-commit: refusing to commit secret file: $f" >&2
+		fail=1
+	fi
+done <<< "$staged"
+
+while IFS= read -r f; do
+	[ -n "$f" ] || continue
+	# Added lines only, with the diff's leading '+' stripped so ^-anchors work.
+	if git diff --cached -U0 --diff-filter=ACMR -- "$f" | sed -n 's/^+//p' | grep -Eiv "$PLACEHOLDER" | grep -Eq "$SECRET_VALUE"; then
+		echo "pre-commit: $f adds what looks like a live secret value." >&2
+		fail=1
+	fi
+done <<< "$staged"
+
+if [ "$fail" -ne 0 ]; then
+	echo 'pre-commit: aborted. Secrets belong in .env (git-ignored); commit only the `env` placeholder template.' >&2
+	echo 'pre-commit: if this is genuinely a placeholder, re-run with: git commit --no-verify' >&2
+	exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Gates 3 and 4 — lint, then 100% coverage, then Qodana. Same bars as CI, before
+# the commit instead of after the push.
+#
+# Lint is first of the three: it is by far the cheapest, and a reformat is the
+# one failure the other two cannot see. `yarn lint` would rewrite the file
+# anyway, so a commit that skips the check lands source that the next lint run
+# immediately changes — and the check covers the whole tree, configs and tests
+# included, not just src/.
+#
+# Thresholds live elsewhere and this hook never softens them: vitest.config.mts
+# (`thresholds: { 100: true }`) and qodana.yaml (testCoverageThresholds
+# 100 total / 100 fresh, plus the license and SCA rules). The hook only decides
+# *when* they run.
+#
+# Why coverage runs here when .githooks/pre-push already runs it: Qodana scores
+# coverage from coverage/lcov.info, so the report has to exist and be current
+# before the scan. `./qodana.sh` regenerates it with `yarn test:cov || true` —
+# deliberately swallowing a threshold miss so the scan still runs. That is right
+# for a manual scan and wrong for a gate, so the suite runs here first with its
+# exit code honoured, and the scan is then handed SKIP_TESTS=1 to reuse the
+# report rather than run the suite a second time.
+#
+# `yarn test:mutation` is NOT run here — it is the slowest of the pre-push gates
+# and that hook already enforces it. Coverage is here only because Qodana
+# scores it from coverage/lcov.info and needs the report to exist.
+#
+# Caveat, same as every test-running hook: the suite sees the working tree, not
+# the staged snapshot. With unstaged edits in flight, what is tested is not
+# exactly what is committed. Stashing inside a hook risks losing work when the
+# hook fails, so it is left alone.
+#
+# Bypass: `git commit --no-verify` (whole hook) · `SKIP_QODANA=1 git commit`
+# (scan only, coverage still gates).
+# ---------------------------------------------------------------------------
+
+# Only these can move a verdict: sources and tests (inspections + coverage), the
+# dependency manifests (SCA + license audit), the scan/test/lint configs, and the
+# hooks themselves. Deletions count — dropping a test file lowers coverage as
+# surely as adding untested code — so D stays in the filter.
+#
+# eslint.config.js and the two prettier files are in the list because the lint
+# gate reads them: an edit there changes the verdict for every file in the tree
+# without appearing in any of them. They were missing for as long as lint was not
+# gated here, which is how eight commits widening the eslint `ignores` block each
+# ran no gate at all — the change that most needed checking was the one that
+# skipped every check.
+RELEVANT_PATHS='^(src/|test/|semgrep/|\.githooks/|package\.json$|yarn\.lock$|qodana\.(yaml|sh)$'
+RELEVANT_PATHS+='|vitest[^/]*\.mts$|tsconfig[^/]*\.json$|stryker\.config\.mjs$'
+RELEVANT_PATHS+='|eslint\.config\.js$|\.prettier(rc|ignore)$)'
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMRD)"
+
+if [ -z "$STAGED" ] || ! grep -Eq "$RELEVANT_PATHS" <<< "$STAGED"; then
+	echo 'pre-commit: no source/test/config changes staged — lint, coverage and Qodana gates skipped.'
+	exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+# $1 = what is wrong, $2… = the command(s) that fix it.
+#
+# A missing prerequisite blocks; it never warns and continues. A gate that steps
+# aside when it cannot run is not a gate, it is the hole this hook exists to
+# close, reopened one condition lower. So every check below prints the one
+# command that fixes it and exits 1.
+gate_block() {
+	local reason="$1"
+	shift
+	{
+		echo
+		echo "pre-commit: BLOCKED — $reason"
+		echo
+		echo 'Fix it with:'
+		echo
+		printf '    %s\n' "$@"
+		echo
+		echo 'Bypass once (CI and pre-push still gate): git commit --no-verify'
+		echo
+	} >&2
+	exit 1
+}
+
+# `engines.node` is a HARD gate under yarn classic — a mismatch exits 1 with
+# `The engine "node" is incompatible with this module`, not a warning — and this
+# machine's default node is older than the pin. Read the requirement from
+# package.json rather than hard-coding it, so bumping the engine in one place
+# cannot leave the hook testing on a version nothing else uses.
+REQUIRED_NODE="$(node -p 'require("./package.json").engines.node' 2> /dev/null | tr -d '^~>= ')"
+
+node_satisfies() {
+	local current
+	current="$(node -v 2> /dev/null | tr -d 'v')"
+	[ -n "$current" ] && [ -n "$REQUIRED_NODE" ] || return 1
+	# caret semantics: same major, and not older than the pin.
+	[ "${current%%.*}" = "${REQUIRED_NODE%%.*}" ] || return 1
+	[ "$(printf '%s\n%s\n' "$REQUIRED_NODE" "$current" | sort -V | head -n 1)" = "$REQUIRED_NODE" ]
+}
+
+if ! node_satisfies; then
+	# nvm.sh trips over unbound variables, so -u comes off around the source.
+	NVM_SH="${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+	if [ -s "$NVM_SH" ]; then
+		echo "pre-commit: node $(node -v 2> /dev/null) does not satisfy engines.node — switching via nvm."
+		set +u
+		# shellcheck disable=SC1090
+		. "$NVM_SH" > /dev/null 2>&1 || true
+		nvm use "$REQUIRED_NODE" > /dev/null 2>&1 || true
+		set -u
+	fi
+fi
+
+if ! node_satisfies; then
+	gate_block "node $(node -v 2> /dev/null || echo '(not found)') does not satisfy engines.node ^$REQUIRED_NODE — yarn refuses to run at all." \
+		"nvm install $REQUIRED_NODE && nvm use $REQUIRED_NODE"
+fi
+
+if ! command -v yarn > /dev/null 2>&1; then
+	gate_block 'yarn not found in PATH — cannot run the lint or coverage gates.' \
+		'npm i -g yarn@1.22.22'
+fi
+
+echo 'pre-commit: checking lint and formatting (yarn lint:check)…'
+
+if ! yarn lint:check; then
+	cat >&2 << 'EOF'
+
+pre-commit: BLOCKED — eslint or prettier is not clean.
+
+`lint:check` is `yarn lint` without the writes: eslint over the whole tree, then
+`prettier --check` over the same. Whole tree, not src/ — the tests, the configs
+and the yaml are in scope too, which is where drift used to sit unnoticed.
+
+Fix it with `yarn lint`, then stage what it rewrote. Never silence a rule to get
+past this: a path that belongs to neither tool belongs in .prettierignore or in
+the `ignores` block of eslint.config.js, with the reason next to it.
+
+Bypass once (pre-push still gates): git commit --no-verify
+EOF
+	exit 1
+fi
+
+echo 'pre-commit: running tests + the 100% coverage gate (yarn test:cov)…'
+
+if ! yarn test:cov; then
+	cat >&2 << 'EOF'
+
+pre-commit: BLOCKED — tests failed, or coverage is below 100%.
+
+vitest.config.mts gates every metric at 100 (`thresholds: { 100: true }`) over
+src/**/*.mts with `all: true`, so an untested new runtime file fails here even
+though nothing imports it. Add the missing test under test/ — never lower the
+threshold. index.mts (server wiring) needs an integration test that boots the
+server; that is where the remaining coverage work, if any, lives.
+
+Full report: coverage/index.html
+Full policy: COVERAGE.md
+Bypass once (pre-push still gates): git commit --no-verify
+EOF
+	exit 1
+fi
+
+echo 'pre-commit: 100% coverage held.'
+
+if [ -n "${SKIP_QODANA:-}" ]; then
+	echo 'pre-commit: Qodana gate skipped — SKIP_QODANA is set.' >&2
+	exit 0
+fi
+
+if ! command -v qodana > /dev/null 2>&1; then
+	gate_block 'the qodana CLI is not in PATH.' \
+		'# install it, then re-run the commit:' \
+		'https://github.com/JetBrains/qodana-cli#installation'
+fi
+
+if ! command -v docker > /dev/null 2>&1; then
+	gate_block 'docker not found in PATH — the CLI runs the linter in a container.' \
+		'# install Docker Engine, then re-run the commit:' \
+		'https://docs.docker.com/engine/install/'
+fi
+
+if ! docker info > /dev/null 2>&1; then
+	gate_block 'docker daemon not reachable.' \
+		'sudo systemctl start docker'
+fi
+
+for required in qodana.yaml qodana.sh; do
+	if [ ! -f "$ROOT/$required" ]; then
+		gate_block "$required missing from the repo root." \
+			"git checkout $required"
+	fi
+done
+
+# Track the image declared in qodana.yaml rather than hard-coding a tag here, so
+# bumping the version in one place cannot leave the hook scanning with an older
+# linter than CI.
+LINTER="$(grep -oE 'jetbrains/qodana-js:[0-9][0-9.]*' "$ROOT/qodana.yaml" | head -n 1 || true)"
+
+if [ -z "$LINTER" ]; then
+	gate_block "no 'jetbrains/qodana-js:<version>' image line found in qodana.yaml." \
+		'# restore the `image:` key, then re-run the commit:' \
+		'git checkout qodana.yaml'
+fi
+
+# The CLI would pull this itself. Blocking instead keeps a slow or unreachable
+# Docker Hub from turning into a failed commit: one explicit pull per image
+# bump, versus a network flake on any commit.
+if ! docker image inspect "$LINTER" > /dev/null 2>&1; then
+	gate_block "linter image $LINTER not present locally." \
+		"docker pull $LINTER"
+fi
+
+# Metadata check only — the value is never read here. qodana.sh loads the token
+# into the process env without printing it.
+if [ ! -f "$ROOT/.env" ] || ! grep -q '^[[:space:]]*QODANA_TOKEN=' "$ROOT/.env"; then
+	gate_block 'no QODANA_TOKEN in .env — Qodana 2023.2+ refuses to start without it.' \
+		'# get a project token from https://qodana.cloud, then:' \
+		"echo 'QODANA_TOKEN=<token>' >> .env"
+fi
+
+echo "pre-commit: running Qodana ($LINTER)…"
+
+# SKIP_TESTS=1 reuses the coverage/lcov.info just written above instead of
+# re-running the suite inside qodana.sh.
+if ! SKIP_TESTS=1 "$ROOT/qodana.sh" --results-dir "$ROOT/.qodana/results"; then
+	cat >&2 << 'EOF'
+
+pre-commit: BLOCKED — Qodana failed.
+
+The gate lives in qodana.yaml: testCoverageThresholds 100 total / 100 fresh,
+plus the SCA vulnerable-dependency check and the license audit. Findings are
+listed above, with a report link on qodana.cloud.
+
+Local SARIF: .qodana/results/qodana.sarif.json
+
+This exit code also covers infrastructure failures (daemon died mid-scan, out of
+disk). If the report shows no findings, it was not a finding.
+
+Bypass once (coverage and pre-push still gate): SKIP_QODANA=1 git commit
+EOF
+	exit 1
+fi
+
+echo 'pre-commit: Qodana clean. Proceeding with commit.'
+exit 0

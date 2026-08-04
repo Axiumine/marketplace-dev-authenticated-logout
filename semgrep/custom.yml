@@ -1,0 +1,55 @@
+# Project-specific Semgrep rules for marketplace-dev-authenticated-logout.
+#
+# Registry packs (p/typescript, p/javascript, p/nodejs, p/secrets) are passed
+# on the command line by the `semgrep` / `semgrep:ci` yarn scripts. This file
+# holds only rules specific to the Marketplace platform's own conventions.
+#
+# Note: the sinks below are restricted to console / logger / log receivers on
+# purpose — matching any `x.y(...)` call gives false positives (e.g. clearing
+# the refresh_token cookie via ctx.cookies.set('refresh_token', ...)).
+rules:
+  # x-introspectioncode / INTROSPECTION_CODE is a service-to-service secret
+  # that bypasses the token check (see CLAUDE.md). It must never reach logs.
+  - id: marketplace-no-log-introspection-code
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Do not log the introspection code — it is a service-to-service secret (see CLAUDE.md, "never log x-introspectioncode"). Remove it from the log call.
+    metadata:
+      category: security
+      confidence: MEDIUM
+      references:
+        - CLAUDE.md
+    patterns:
+      - pattern-either:
+          - pattern: console.$M(..., $ARG, ...)
+          - patterns:
+              - pattern: $L.$M(..., $ARG, ...)
+              - metavariable-regex:
+                  metavariable: $L
+                  regex: (?i)^(logger|log)$
+      - metavariable-regex:
+          metavariable: $ARG
+          regex: (?i)(introspection|x-introspectioncode|introspectioncode)
+
+  # Opaque access/refresh tokens live in Redis sessions and signed cookies.
+  # Logging them defeats the whole point of opaque tokens.
+  - id: marketplace-no-log-auth-token
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      Possible logging of an access/refresh token. Auth tokens must not be written to logs (see CLAUDE.md — opaque tokens + Redis sessions).
+    metadata:
+      category: security
+      confidence: LOW
+    patterns:
+      - pattern-either:
+          - pattern: console.$M(..., $ARG, ...)
+          - patterns:
+              - pattern: $L.$M(..., $ARG, ...)
+              - metavariable-regex:
+                  metavariable: $L
+                  regex: (?i)^(logger|log)$
+      - metavariable-regex:
+          metavariable: $ARG
+          regex: (?i)(accesstoken|access_token|refreshtoken|refresh_token|bearer)

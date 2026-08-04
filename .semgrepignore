@@ -1,0 +1,19 @@
+# Paths excluded from semgrep scans.
+# Build output, deps, coverage, uploads — not source.
+node_modules/
+dist/
+coverage/
+uploads/
+upload/
+
+# Merge leftovers and generated noise (see CLAUDE.md).
+*.orig
+*.log
+nohup.out
+favicon.ico
+
+# Semgrep's own output.
+semgrep.sarif
+
+# The vendored rules dir is config, not source — never scan it.
+semgrep/

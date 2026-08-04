@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+# Four gates, all blocking:
+#   1. lint     — eslint + prettier --check over the whole tree (yarn lint:check)
+#   2. coverage — 100% on every metric (yarn test:cov)
+#   3. mutation — 100% mutation score (yarn test:mutation)
+#   4. Qodana   — inspections, SAST, SCA, license audit, coverage (qodana.yaml)
+#
+# Coverage proves the lines ran. Mutation proves the assertions actually catch a
+# change in them. Qodana proves nothing else regressed — and is the only gate
+# that ever sees the merge commit (see gate 4). Neither number may be lowered: if one goes red the fix is a test,
+# a deleted dead branch, or — for a provably equivalent mutant — a documented
+# `// Stryker disable next-line <Mutator>: <why>`. See COVERAGE.md.
+#
+# Ahead of all four: node. Every gate shells out to yarn, and `engines.node` is a
+# HARD gate under yarn classic — a mismatch exits 1 with `The engine "node" is
+# incompatible with this module`, not a warning. Without the switch below, a push
+# from a shell on the machine default node dies before the first gate, under
+# whatever banner that gate prints, which is never what went wrong.
+#
+# Enabled by `git config core.hooksPath .githooks`, which the package.json
+# `prepare` script sets automatically on `yarn install`.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Read the requirement from package.json rather than hard-coding it, so bumping the
+# engine in one place cannot leave the hook testing against a version nothing else
+# uses. Same block as marketplace-common's pre-commit, which is where it was written.
+REQUIRED_NODE="$(node -p 'require("./package.json").engines.node' 2> /dev/null | tr -d '^~>= ')"
+
+node_satisfies() {
+	local current
+	current="$(node -v 2> /dev/null | tr -d 'v')"
+	[ -n "$current" ] && [ -n "$REQUIRED_NODE" ] || return 1
+	# caret semantics: same major, and not older than the pin.
+	[ "${current%%.*}" = "${REQUIRED_NODE%%.*}" ] || return 1
+	[ "$(printf '%s\n%s\n' "$REQUIRED_NODE" "$current" | sort -V | head -n 1)" = "$REQUIRED_NODE" ]
+}
+
+if ! node_satisfies; then
+	# nvm.sh trips over unbound variables, so -u comes off around the source.
+	NVM_SH="${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+	if [ -s "$NVM_SH" ]; then
+		echo "pre-push: node $(node -v 2> /dev/null) does not satisfy engines.node ^$REQUIRED_NODE — switching via nvm."
+		set +u
+		# shellcheck disable=SC1090
+		. "$NVM_SH" > /dev/null 2>&1 || true
+		nvm use "$REQUIRED_NODE" > /dev/null 2>&1 || true
+		set -u
+	fi
+fi
+
+if ! node_satisfies; then
+	cat >&2 <<MSG
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — wrong node.
+
+node $(node -v 2> /dev/null || echo '(not found)') does not satisfy engines.node ^$REQUIRED_NODE, and nvm could
+not be used to switch — either it is not installed at \${NVM_DIR:-\$HOME/.nvm}/nvm.sh
+or that version is not installed. yarn refuses to run at all in this state, so
+none of the four gates below could report anything.
+
+Fix it with:
+
+    nvm install $REQUIRED_NODE && nvm use $REQUIRED_NODE
+
+then push again.
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
+
+echo "pre-push [1/4]: checking lint and formatting (yarn lint:check)…"
+
+if ! yarn lint:check; then
+	cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — eslint or prettier is not clean.
+
+`lint:check` is `yarn lint` without the writes: eslint over the whole tree, then
+`prettier --check` over the same — tests, configs and yaml included, not just
+src/. Fix it with:
+
+    yarn lint
+
+and commit what it rewrote. Never silence a rule to get a push through: a path
+that belongs to neither tool belongs in .prettierignore or in the `ignores`
+block of eslint.config.js, with the reason written next to it.
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
+
+echo "pre-push [2/4]: enforcing 100% test coverage (yarn test:cov)…"
+
+if ! yarn test:cov; then
+	cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — coverage is below 100%.
+
+Fix it (do NOT lower the thresholds in vitest.config.mts / qodana.yaml):
+  1. Add the missing tests for the uncovered lines / branches / functions.
+  2. If the uncovered code is unreachable or dead, delete it.
+  3. index.mts (server wiring) and instrument.mts (Sentry) need an integration
+     test that boots the server — that is the remaining coverage work.
+
+Re-run `yarn test:cov` until every metric reports 100%, then push again.
+Full policy: COVERAGE.md
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
+
+echo "pre-push [3/4]: enforcing 100% mutation score (yarn test:mutation)…"
+
+if ! yarn test:mutation; then
+	cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — mutation score is below 100%.
+
+Every surviving mutant is an edit to src/ that no test noticed. Fix it
+(do NOT lower `thresholds.break` in stryker.config.mjs):
+  1. Open reports/mutation/mutation.html and read each [Survived] mutant.
+  2. Strengthen the assertion that should have caught it. A test that only
+     checks `rejects.toThrow()` passes for every possible error — assert which
+     one (see expectRejectionDescription in
+     test/authorizationLogoutHandler.test.mts).
+  3. Only if the mutant is provably equivalent — the mutated code cannot behave
+     differently on any reachable input — annotate it in src with
+     `// Stryker disable next-line <Mutator>: <why>` and write the reachability
+     argument in a comment above it.
+
+Re-run `yarn test:mutation` until it reports 100%, then push again.
+Full policy: COVERAGE.md
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Gate 4 — Qodana. It runs here as well as in pre-commit, for two reasons that
+# pre-commit structurally cannot cover.
+#
+# 1. `git merge --no-ff` never fires pre-commit. Git runs that hook for
+#    `git commit` only, so in the branch → commit → merge → push flow the merge
+#    commit — the one revision that actually reaches origin — is the single
+#    commit no pre-commit scan ever sees. Two individually clean branches can
+#    merge into a tree that is not.
+# 2. Qodana Cloud files every report under the branch it was produced on, and
+#    pre-commit always runs on the feature branch, before the commit exists. A
+#    repo gated only there can never produce a `main`-tagged report, so `main`
+#    is not offered as the cloud project's default branch and the "new problems"
+#    baseline has nothing stable to compare against. This hook runs after the
+#    merge, standing on main, which is exactly the revision the baseline wants.
+#
+# SKIP_TESTS=1: gate 2 has already written a current coverage/lcov.info, and
+# qodana.sh would otherwise re-run the whole suite with `|| true`, swallowing the
+# exit code. Reuse the report rather than pay for it twice.
+#
+# Bypass: `SKIP_QODANA=1 git push` (coverage and mutation still gate).
+# ---------------------------------------------------------------------------
+
+if [ -n "${SKIP_QODANA:-}" ]; then
+	echo 'pre-push: Qodana gate skipped — SKIP_QODANA is set.' >&2
+	exit 0
+fi
+
+# $1 = what is wrong, $2… = the command(s) that fix it. A missing prerequisite
+# blocks; it never warns and continues. A gate that steps aside when it cannot
+# run is not a gate, it is the hole this hook exists to close, reopened one
+# condition lower.
+push_block() {
+	local reason="$1"
+	shift
+	{
+		echo
+		echo '────────────────────────────────────────────────────────────────────────────'
+		echo "PUSH BLOCKED — $reason"
+		echo
+		echo 'Fix it with:'
+		echo
+		printf '    %s\n' "$@"
+		echo
+		echo 'Bypass once (coverage and mutation still gate): SKIP_QODANA=1 git push'
+		echo '────────────────────────────────────────────────────────────────────────────'
+	} >&2
+	exit 1
+}
+
+command -v qodana > /dev/null 2>&1 ||
+	push_block 'the qodana CLI is not in PATH.' \
+		'# install it, then push again:' \
+		'https://github.com/JetBrains/qodana-cli#installation'
+
+command -v docker > /dev/null 2>&1 ||
+	push_block 'docker not found in PATH — the CLI runs the linter in a container.' \
+		'# install Docker Engine, then push again:' \
+		'https://docs.docker.com/engine/install/'
+
+docker info > /dev/null 2>&1 ||
+	push_block 'docker daemon not reachable.' \
+		'sudo systemctl start docker'
+
+for required in qodana.yaml qodana.sh; do
+	[ -f "$required" ] ||
+		push_block "$required missing from the repo root." \
+			"git checkout $required"
+done
+
+# Track the image declared in qodana.yaml rather than hard-coding a tag here, so
+# bumping the version in one place cannot leave the hook scanning with an older
+# linter than the manual runs use.
+LINTER="$(grep -oE 'jetbrains/qodana-js:[0-9][0-9.]*' qodana.yaml | head -n 1 || true)"
+
+[ -n "$LINTER" ] ||
+	push_block "no 'jetbrains/qodana-js:<version>' image line found in qodana.yaml." \
+		'# restore the `image:` key, then push again:' \
+		'git checkout qodana.yaml'
+
+# The CLI would pull this itself. Blocking instead keeps a slow or unreachable
+# Docker Hub from turning into a failed push: one explicit pull per image bump,
+# versus a network flake on any push.
+docker image inspect "$LINTER" > /dev/null 2>&1 ||
+	push_block "linter image $LINTER not present locally." \
+		"docker pull $LINTER"
+
+# Metadata check only — the value is never read here. qodana.sh loads the token
+# into the process env without printing it.
+{ [ -f ".env" ] && grep -q '^[[:space:]]*QODANA_TOKEN=' ".env"; } ||
+	push_block "no QODANA_TOKEN in .env — Qodana 2023.2+ refuses to start without it." \
+		'# get a project token from https://qodana.cloud, then:' \
+		"echo 'QODANA_TOKEN=<token>' >> .env"
+
+echo "pre-push [4/4]: enforcing the Qodana gate ($LINTER)…"
+
+if ! SKIP_TESTS=1 ./qodana.sh --results-dir .qodana/results; then
+	cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — Qodana failed.
+
+The gate lives in qodana.yaml: testCoverageThresholds 100 total / 100 fresh,
+plus the SCA vulnerable-dependency check and the third-party license audit.
+Findings are listed above, with a report link on qodana.cloud.
+
+Local SARIF: .qodana/results/qodana.sarif.json
+
+This exit code also covers infrastructure failures (daemon died mid-scan, out
+of disk). If the report shows no findings, it was not a finding.
+
+Bypass once (coverage and mutation still gate): SKIP_QODANA=1 git push
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
+
+echo 'pre-push: Qodana clean. Pushing.'
