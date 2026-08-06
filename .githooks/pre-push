@@ -26,7 +26,33 @@ cd "$(git rev-parse --show-toplevel)"
 # Read the requirement from package.json rather than hard-coding it, so bumping the
 # engine in one place cannot leave the hook testing against a version nothing else
 # uses. Same block as marketplace-common's pre-commit, which is where it was written.
-REQUIRED_NODE="$(node -p 'require("./package.json").engines.node' 2> /dev/null | tr -d '^~>= ')"
+# The `|| REQUIRED_NODE=''` is load-bearing under `set -euo pipefail`: with no node on PATH the
+# substitution exits 127, and `-e` plus `pipefail` then kill the hook right here — silently, with
+# no output at all, before the block below can print the one message that would explain it.
+# Degrading to empty instead lets node_satisfies() return 1 and the real diagnostic fire.
+REQUIRED_NODE="$(node -p 'require("./package.json").engines.node' 2> /dev/null | tr -d '^~>= ')" || REQUIRED_NODE=''
+
+# Empty means node is not on PATH at all — a different failure from the wrong version, and one
+# the block below cannot describe: with nothing to interpolate it prints `engines.node ^` and a
+# fix line reading `nvm install  && nvm use `, neither of which names anything.
+if [ -z "$REQUIRED_NODE" ]; then
+	cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — node not found in PATH.
+
+engines.node could not be read from package.json, so the version the gates need
+is unknown and nvm has nothing to switch to.
+
+Fix it with:
+
+    nvm install --lts && nvm use --lts
+
+then push again.
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
 
 node_satisfies() {
 	local current
@@ -64,6 +90,27 @@ none of the four gates below could report anything.
 Fix it with:
 
     nvm install $REQUIRED_NODE && nvm use $REQUIRED_NODE
+
+then push again.
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
+
+# Every gate below shells out to yarn. Without this check a missing binary is reported as
+# whichever gate happened to run first ("eslint or prettier is not clean"), which sends the
+# reader after the wrong thing. pre-commit already carries the same check.
+if ! command -v yarn > /dev/null 2>&1; then
+	cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — yarn not found in PATH.
+
+None of the gates below could run: every one of them shells out to yarn.
+
+Fix it with:
+
+    npm i -g yarn@1.22.22
 
 then push again.
 ────────────────────────────────────────────────────────────────────────────

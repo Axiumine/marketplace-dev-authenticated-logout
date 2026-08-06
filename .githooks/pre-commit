@@ -29,10 +29,15 @@ SECRET_VALUE+='|_authToken[[:space:]]*=[[:space:]]*["'"'"']?([0-9a-f]{8}-[0-9a-f
 SECRET_VALUE+='|-----BEGIN [A-Z ]*PRIVATE KEY-----'
 SECRET_VALUE+='|KEYGRIP_KEY_[12][[:space:]]*=[[:space:]]*"[^x"]{40}'
 # dotenv style: KEY=<16+ chars>, at line start (a leading + from the diff is stripped first)
-SECRET_VALUE+='|^[[:space:]]*(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)=[^$x[:space:]][^[:space:]]{15,}'
+SECRET_VALUE+='|^[[:space:]]*(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)=[^$x[:space:]][^[:space:]]{15,}'
 # code style: KEY = "<16+ chars>" — a quoted literal, never process.env.KEY
-SECRET_VALUE+='|(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)[[:space:]]*[:=][[:space:]]*["'"'"'][^$x"'"'"'][^"'"'"']{15,}["'"'"']'
+SECRET_VALUE+='|(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)[[:space:]]*[:=][[:space:]]*["'"'"'][^$x"'"'"'][^"'"'"']{15,}["'"'"']'
 SECRET_VALUE+='|mongodb(\+srv)?://[^:/[:space:]]+:[^@[:space:]]{10,}@'
+# credential URL: `https://<userinfo>@host`, which is the shape of a Sentry/Bugsink DSN.
+# `DSN` cannot join the key list above — the committed `env` template assigns one there, so a
+# key-name rule would block the template itself. What separates the two is the userinfo: the
+# placeholder is 14 `x`, a real key is 32+ hex. Hence first-char-not-x plus a 20-char floor.
+SECRET_VALUE+='|https://[^$x:@/[:space:]"][^:@/[:space:]"]{19,}@'
 
 # Declared-placeholder lines, dropped before the value scan: a whole line whose *only*
 # content is `KEY=test-…` / `KEY: 'test-…'` (test fixtures in vitest.config.mts and friends).
@@ -42,7 +47,15 @@ SECRET_VALUE+='|mongodb(\+srv)?://[^:/[:space:]]+:[^@[:space:]]{10,}@'
 PLACEHOLDER='^[[:space:]]*[A-Za-z_][A-Za-z_0-9]*[[:space:]]*[:=][[:space:]]*'
 PLACEHOLDER+='["'"'"']?(test|dummy|fake|sample|example|placeholder|changeme|your[-_])[A-Za-z_0-9:/.-]*["'"'"']?,?[[:space:]]*$'
 
-staged=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ev "$SKIP_PATH" || true)
+# The `|| true` below absorbs grep's no-match exit 1 — it must not also absorb git's. A failed
+# `git diff` yields an empty list, and an empty list is exactly what "nothing staged" looks like:
+# the two loops would then scan nothing and the commit would pass by having read no files at all.
+# So git's status is taken on its own line, before grep can hide it.
+if ! all_staged="$(git diff --cached --name-only --diff-filter=ACMR)"; then
+	echo 'pre-commit: `git diff --cached` failed — refusing to commit rather than scan nothing.' >&2
+	exit 1
+fi
+staged=$(printf '%s\n' "$all_staged" | grep -Ev "$SKIP_PATH" || true)
 
 while IFS= read -r f; do
 	[ -n "$f" ] || continue
@@ -118,7 +131,13 @@ RELEVANT_PATHS='^(src/|test/|semgrep/|\.githooks/|package\.json$|yarn\.lock$|qod
 RELEVANT_PATHS+='|vitest[^/]*\.mts$|tsconfig[^/]*\.json$|stryker\.config\.mjs$'
 RELEVANT_PATHS+='|eslint\.config\.js$|\.prettier(rc|ignore)$)'
 
-STAGED="$(git diff --cached --name-only --diff-filter=ACMRD)"
+# Same reasoning as the secret guard's list above: unguarded, a failed `git diff` is
+# indistinguishable from an empty one, and the empty one is the branch that exits 0 having
+# run no gate at all — the loudest possible failure would be reported as the quietest pass.
+if ! STAGED="$(git diff --cached --name-only --diff-filter=ACMRD)"; then
+	echo 'pre-commit: `git diff --cached` failed — refusing to commit rather than skip every gate.' >&2
+	exit 1
+fi
 
 if [ -z "$STAGED" ] || ! grep -Eq "$RELEVANT_PATHS" <<< "$STAGED"; then
 	echo 'pre-commit: no source/test/config changes staged — lint, coverage and Qodana gates skipped.'
@@ -156,6 +175,14 @@ gate_block() {
 # package.json rather than hard-coding it, so bumping the engine in one place
 # cannot leave the hook testing on a version nothing else uses.
 REQUIRED_NODE="$(node -p 'require("./package.json").engines.node' 2> /dev/null | tr -d '^~>= ')"
+
+# An empty value here means node is not on PATH at all, which is a different failure from the
+# wrong version and needs saying: without it the block below interpolates nothing and prints
+# `engines.node ^` and `nvm install  && nvm use ` — a fix line with no argument.
+if [ -z "$REQUIRED_NODE" ]; then
+	gate_block 'node not found in PATH — engines.node could not be read from package.json.' \
+		'nvm install --lts && nvm use --lts'
+fi
 
 node_satisfies() {
 	local current
