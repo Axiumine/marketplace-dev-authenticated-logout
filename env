@@ -30,6 +30,8 @@ INTROSPECTION_CODE='xxx'
 KEYGRIP_KEY_1="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 KEYGRIP_KEY_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
+# Optional: an empty or missing DSN leaves the Sentry SDK inert and the service still boots.
+# Deliberately absent from REQUIRED_ENV_VARS in src/index.mts — do not add it back.
 DSN="https://xxxxxxxxxxxxxx@bugsink.lan/1"
 
 
