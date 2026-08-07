@@ -36,7 +36,16 @@ export const REQUIRED_ENV_VARS = [
 	'REDIS_DB3_PORT',
 	'REDIS_USERNAME',
 	'REDIS_PASSWORD',
-	'REDIS_KEY'
+	'REDIS_KEY',
+	// The service-to-service bypass compares against `${process.env.INTROSPECTION_CODE}`, so an UNSET
+	// value makes that comparison `'undefined' === 'undefined'`. It matters more here than in the
+	// authorization services: this handler consults the code when there is NO cookie and NO
+	// Authorization header at all, so with the variable unset a caller sending the literal string
+	// `undefined` skips the session lookup entirely and reaches the resolver as a trusted internal
+	// caller. (It then dereferences an unset ctx.state.user, is caught, and answers true — nothing is
+	// deleted — but the middleware's decision was already wrong by then.) No MONGODB_URI here: this
+	// service connects Redis only.
+	'INTROSPECTION_CODE'
 ]
 
 /**
