@@ -6,8 +6,8 @@ mapping and the auth model live there, not here; this file carries only what is 
 
 ## Version control
 
-**git**, branch `main`, remote `origin` on GitHub under `Marketplace-Org`, private. **Never commit on
-`main`** — branch first (`git switch -c <type>/<slug>`), and merging is the user's decision alone.
+**git**, branch `main`, **no remote**. **Never commit on `main`** — branch first
+(`git switch -c <type>/<slug>`), and merging is the user's decision alone.
 
 **Delete the local branch as soon as it is merged**: `git branch -d <slug>`, in the same breath as the
 merge, not at the top of the next task. Use `-d` and never `-D` — `-d` refuses a branch whose commits
