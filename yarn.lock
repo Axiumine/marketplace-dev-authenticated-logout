@@ -184,10 +184,10 @@
   resolved "http://yarnproxy.gio.lan:4873/@axiumine/eslint-config-be/-/eslint-config-be-2.0.2.tgz#23f0e79981bce36ad09979ae0b27b23a1183cec6"
   integrity sha512-uOuWXo093AVrrO5jW46v+F2mW7k+yz0cH5NCU/bGv0gnnFxAfmO6dhW19SbdT6uL/1CbX5DiGeKC/hVPdZY+FA==
 
-"@axiumine/koa-utils@^5.7.0":
-  version "5.7.2"
-  resolved "http://yarnproxy.gio.lan:4873/@axiumine/koa-utils/-/koa-utils-5.7.2.tgz#5bf8c988a0060e8754a21874b819db2b8d604445"
-  integrity sha512-leytmBp5F0Uf+u8ZL0DVxq11ALGqYNEeAfPwwfz8DumUnGU9bOgGmzJHSW4foBPRWyOik8SO5g1ZJ2Yb67r73Q==
+"@axiumine/koa-utils@^5.9.0":
+  version "5.9.0"
+  resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-5.9.0.tgz#ed2b0494bc74fed24f2b0e4664a1d74cfa7f185a"
+  integrity sha512-TP4hJhYlIAXm3n3OP/ILDD87ZcwrDr4k30Mdwj58vAJdC23R0/a4AyH12B7lPzm8utlFKAhH2rWaShAj40TmYg==
 
 "@babel/code-frame@^7.29.7":
   version "7.29.7"
