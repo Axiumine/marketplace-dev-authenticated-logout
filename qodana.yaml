@@ -143,7 +143,7 @@ exclude:
   # Re-verified on 2026-08-01 against a second file, because the scope below was
   # wrong: it named `index.itest.mts` alone while every other integration test
   # imports the entry point the same way, so `startFailure`, `shutdown` and
-  # `cibi` kept reporting. The failure is identical in all of them —
+  # `refreshFailure` kept reporting. The failure is identical in all of them —
   #   Error: Cannot find module '/src' imported from test/integration/shutdown.itest.mts
   # — the repo's vitest resolver reduces the directory specifier to `/src` and
   # finds nothing. That went unnoticed because the scan had no severity gate and
