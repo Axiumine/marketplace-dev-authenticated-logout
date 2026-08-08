@@ -17,7 +17,6 @@ semgrep.sarif
 # Stryker (yarn test:mutation)
 reports/
 .stryker-tmp/
-.env*.bak
 
 # Qodana — scan results (SARIF + report), written by .githooks/pre-commit and pre-push.
 # They pass --results-dir .qodana/results so the SARIF is readable from the repo root
