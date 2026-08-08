@@ -11,13 +11,7 @@ import { nodeNextResolver } from './vitest.shared.mts'
 // boundary they carry different graphql copies, the instanceof is false, and a 401 answers as
 // 500 "Internal Server Error" — a failure that exists only under vitest, since plain node
 // resolves both to one copy.
-const inlineDeps = [
-	/graphql/,
-	/@apollo\/server/,
-	/@as-integrations/,
-	/@axiumine\/koa-utils/,
-	/@thedoctorweb_agency\/marketplace-common/
-]
+const inlineDeps = [/graphql/, /@apollo\/server/, /@as-integrations/, /@axiumine\/koa-utils/, /@axiumine\/marketplace-common/]
 
 // Two projects, one aggregated coverage report (must reach 100% — see COVERAGE.md):
 //   - unit:        Redis mocked, fast, no datasource needed.
