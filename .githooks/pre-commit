@@ -2,7 +2,9 @@
 # pre-commit — secret guard, then the lint, coverage and Qodana quality gates.
 #
 # Installed as a per-repo copy (not a symlink: nothing else can move out from
-# under it). Four independent checks, cheapest first:
+# under it). Five independent checks, cheapest first — check 0 reads the
+# working tree, checks 1-4 the staged index:
+#   0. a working-tree env value is split across two lines -> block
 #   1. staged PATH looks like a secret file             -> block
 #   2. staged ADDED LINES contain a high-entropy secret -> block
 #   3. eslint or prettier is not clean                  -> block  (see below)
@@ -16,6 +18,63 @@
 set -uo pipefail
 
 fail=0
+
+# ---------------------------------------------------------------------------
+# Check 0 — an env value broken across two physical lines.
+#
+# dotenv ends a value at the newline *even inside quotes*, hands back the
+# truncated prefix, and then parses the orphan tail — a bare fragment with no
+# `KEY=` on it — as its own variable named after its first token. Both halves
+# are silent: the service boots, its own suite stays green, and only a peer
+# service that must agree on the value ever notices. On 2026-08-09 all five
+# `.env` files holding `KEYGRIP_KEY_1`/`_2` were broken this way, 88-char keys
+# wrapped after 76, one file carrying the tail twice.
+#
+# Quoting does not prevent it — every one of those values was correctly quoted
+# — so the "quote anything with whitespace" convention (RISK_REGISTER R05) is
+# not enough and this runs as a gate instead. R05b.
+#
+# It reads the working tree, not the index, because the file it most needs to
+# see is git-ignored and never staged. Line numbers and key names only: no
+# value is ever printed, per .claude/SECRETS.md.
+#
+# A deliberate multi-line value (a PEM body, say) would trip this. None exists
+# on this platform; if one is ever added, `git commit --no-verify`.
+# ---------------------------------------------------------------------------
+env_shape_ok() {
+	local f="$1" n=0 line trimmed val q bad=0
+	while IFS= read -r line || [ -n "$line" ]; do
+		n=$((n + 1))
+		trimmed="${line#"${line%%[![:space:]]*}"}"
+		case "$trimmed" in '' | '#'*) continue ;; esac
+		if [[ ! $trimmed =~ ^[A-Za-z_][A-Za-z_0-9]*= ]]; then
+			echo "pre-commit: $f:$n is not a KEY=VALUE line — the value above it is cut in two." >&2
+			bad=1
+			continue
+		fi
+		val="${trimmed#*=}"
+		q="${val:0:1}"
+		if [ "$q" = '"' ] || [ "$q" = "'" ]; then
+			if [ "${#val}" -lt 2 ] || [ "${val: -1}" != "$q" ]; then
+				echo "pre-commit: $f:$n — ${trimmed%%=*} opens a $q quote that never closes on this line." >&2
+				bad=1
+			fi
+		fi
+	done < "$f"
+	return "$bad"
+}
+
+env_shape_fail=0
+for envfile in .env .env.* env; do
+	[ -f "$envfile" ] || continue
+	env_shape_ok "$envfile" || env_shape_fail=1
+done
+if [ "$env_shape_fail" -ne 0 ]; then
+	echo 'pre-commit: aborted — an env value is split across two lines. dotenv silently truncates it and turns the' >&2
+	echo '            orphan tail into a junk variable. Rejoin the value onto one line; no value was printed here.' >&2
+	echo '            Why this is a gate and not a convention: docs/workflow.md §Environment files, R05b.' >&2
+	exit 1
+fi
 
 SECRET_PATH='(^|/)(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc(\.yml)?|\.netrc|\.pgpass|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json|service-account.*\.json)$|\.(pem|p12|pfx|jks)$'
 
