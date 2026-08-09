@@ -8,6 +8,7 @@ Tier/concern split, port table, terminology, auth model live there. Not here.
 
 | Need | File |
 |---|---|
+| what this svc is, its GraphQL surface, its traps | `README.md` |
 | hook internals, gate order, node selection | `REPO.md` |
 | anything cross-repo | parent `CLAUDE.md` |
 
