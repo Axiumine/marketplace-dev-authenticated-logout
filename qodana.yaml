@@ -65,8 +65,12 @@ raiseLicenseProblems: true
 # (`yarn why` confirms that single path): a devDependency, never imported by src/, never
 # bundled, carrying the same dual license. The entry is kept in all seven services rather
 # than pruned per-service, so a dual-licensed package hoisted here later does not reopen it.
+# ⚠️ Two keys, not one. This project declares GPL-3.0-or-later in package.json since the LICENSE
+# file landed, and Qodana derives the project key from that field — a rule keyed only on
+# PROPRIETARY-LICENSE now matches nothing, and a rule that matches no project does not fail: it
+# silently does nothing while the audit still reports green. `allowed` below is unchanged.
 licenseRules:
-  - keys: ['PROPRIETARY-LICENSE']
+  - keys: ['GPL-3.0-or-later', 'PROPRIETARY-LICENSE']
     allowed: ['GPL-3.0-or-later', 'GPL-3.0-only', 'LGPL-3.0-or-later', 'LGPL-3.0-only', 'MPL-2.0', 'CC0-1.0']
 
 # No dependencyOverrides here. There was one, for humanize-number 0.0.2, whose
