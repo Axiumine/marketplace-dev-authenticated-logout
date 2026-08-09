@@ -1,7 +1,7 @@
 # Repository mechanics
 
 How this repo's git plumbing behaves, and why. Nothing here changes what you write — it explains what
-happens when you commit, push, or watch a gate fail. `CLAUDE.md` carries the rules themselves.
+happens when you commit, push, or watch a gate fail. [`CLAUDE.md`](./CLAUDE.md) carries the rules themselves.
 
 ## Hooks
 
@@ -47,5 +47,5 @@ every `pre-commit`, since all of them run tests.
 ## Bypasses
 
 `SKIP_QODANA=1` (scan only — coverage and mutation still gate) · `git commit --no-verify` /
-`git push --no-verify` (the whole hook). Both are gate removals. See `CLAUDE.md` for when they may be
+`git push --no-verify` (the whole hook). Both are gate removals. See [`CLAUDE.md`](./CLAUDE.md) for when they may be
 used, which is: when the user says so, and not otherwise.
