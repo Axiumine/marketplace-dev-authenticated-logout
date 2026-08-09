@@ -47,10 +47,10 @@ run without a session; it means a request carrying that header reaches the resol
 
 | Topic | File |
 |---|---|
-| rules for agents working in this repo | `CLAUDE.md` |
-| git hooks, gate order, node selection | `REPO.md` |
-| the whole platform — tiers, ports, terminology | parent `CLAUDE.md` |
-| the edge and the `Secure` cookie rewrite | parent `marketplace-nginx/CLAUDE.md` |
+| rules for agents working in this repo | [`CLAUDE.md`](./CLAUDE.md) |
+| git hooks, gate order, node selection | [`REPO.md`](./REPO.md) |
+| the whole platform — tiers, ports, terminology | parent [`CLAUDE.md`](./CLAUDE.md) |
+| the edge and the `Secure` cookie rewrite | parent [`marketplace-nginx/CLAUDE.md`](https://github.com/Axiumine/marketplace-nginx/blob/main/CLAUDE.md) |
 
 ## License
 
