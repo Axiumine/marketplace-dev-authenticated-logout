@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Enforces commit message format.
+# Also applies the cross-repo banned-word policy.
+#
+# Format rules (same as subprojects):
+#   Human: <type>(<scope>): <subject>
+#   AI:    🤖 <type>(<scope>): <subject>
+# Allowed types: feat|fix|chore|docs|refactor|ci
+# Merge/revert commits bypass format checks (not banned-word check).
+# Subject: max 150 chars. Body: max 10 lines, wrap at 150.
+
+COMMIT_MSG_FILE="$1"
+
+TYPES="feat|fix|chore|docs|refactor|ci"
+MAX_LEN=150
+
+# git has NOT cleaned this file yet, so scan a cleaned copy, never the file.
+# What is still in there and never reaches the commit:
+#   - the `#` comment template (branch, staged file list, the "lines starting
+#     with '#' will be ignored" blurb)
+#   - under `commit.verbose` or `git commit -v`, the entire staged diff, below a
+#     `# ---- >8 ----` scissors line and NOT `#`-prefixed
+# Scanning either rejects a perfectly good message: any diff over 10 lines fails
+# the body-length check, and committing a file that merely *contains* the string
+# `Co-Authored-By` fails the banned-word check.
+# Leading blanks go too, so line 1 of CLEAN is the subject and `tail -n +2` the body.
+CLEAN=$(sed -e '/^#.*>8/,$d' "$COMMIT_MSG_FILE" | grep -vE '^#' | sed -e '/./,$!d')
+MSG=$(printf '%s\n' "$CLEAN" | head -1)
+
+# Banned words — no AI attribution anywhere in commit messages
+if printf '%s\n' "$CLEAN" | grep -qiE 'Co-Authored-By'; then
+  MATCHED=$(printf '%s\n' "$CLEAN" | grep -iE 'Co-Authored-By' | head -3)
+  echo ""
+  echo "  BANNED WORD IN COMMIT MESSAGE"
+  echo ""
+  echo "  Commit messages must not contain: Co-Authored-By"
+  echo "  Matched:"
+  echo "$MATCHED" | sed 's/^/    /'
+  echo ""
+  exit 1
+fi
+
+# Allow git-generated merge and revert commits
+if echo "$MSG" | grep -qE "^(Merge |Revert )"; then
+  exit 0
+fi
+
+# Enforce subject line length limit
+if [ "${#MSG}" -gt "$MAX_LEN" ]; then
+  echo ""
+  echo "  COMMIT MESSAGE TOO LONG"
+  echo ""
+  echo "  Subject line is ${#MSG} characters (max $MAX_LEN)."
+  echo "  Got: $MSG"
+  echo ""
+  exit 1
+fi
+
+# Enforce body limits: max lines and max width.
+# Excluded: blank lines, trailers (Key: value), lines with no whitespace
+# (URLs, long identifiers). Comments are already gone from CLEAN.
+MAX_BODY_LINES=10
+BODY_LINES=$(printf '%s\n' "$CLEAN" | tail -n +2 \
+  | grep -vE '^\s*$' \
+  | grep -vE '^[A-Za-z-]+: ' || true)
+
+if [ -n "$BODY_LINES" ]; then
+  BODY_COUNT=$(echo "$BODY_LINES" | wc -l)
+  if [ "$BODY_COUNT" -gt "$MAX_BODY_LINES" ]; then
+    echo ""
+    echo "  COMMIT BODY TOO LONG"
+    echo ""
+    echo "  Body is $BODY_COUNT lines (max $MAX_BODY_LINES, excluding blanks/trailers)."
+    echo "  Keep the body terse: what changed and why. Detail belongs in"
+    echo "  PR descriptions or docs, not the commit message."
+    echo ""
+    exit 1
+  fi
+  WIDE_LINE=$(echo "$BODY_LINES" | grep -E '\s' | awk -v max="$MAX_LEN" 'length($0) > max { print; exit }')
+  if [ -n "$WIDE_LINE" ]; then
+    echo ""
+    echo "  COMMIT BODY LINE TOO WIDE"
+    echo ""
+    echo "  Wrap body lines at $MAX_LEN characters."
+    echo "  Got: $WIDE_LINE"
+    echo ""
+    exit 1
+  fi
+fi
+
+# Allow human format:  <type>(<scope>): <subject>
+# Allow AI format:     🤖 <type>(<scope>): <subject>
+if echo "$MSG" | grep -qE "^(🤖 )?($TYPES)(\(.+\))?: .+"; then
+  exit 0
+fi
+
+echo ""
+echo "  INVALID COMMIT MESSAGE"
+echo ""
+echo "  Got:      $MSG"
+echo ""
+echo "  Expected:"
+echo "    Human:  <type>(<scope>): <subject>"
+echo "    AI:     🤖 <type>(<scope>): <subject>"
+echo ""
+echo "  Types: feat | fix | chore | docs | refactor | ci"
+echo "  Scope: optional, e.g. feat(auth): ..."
+echo ""
+echo "  Examples:"
+echo "    docs: update COMPATIBILITY.md"
+echo "    🤖 chore: merge docs/audit-2026-06-12"
+echo ""
+exit 1
