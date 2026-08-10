@@ -5,6 +5,7 @@ import { throwAlreadyDone } from '@axiumine/koa-utils/graphQL/throw/throwAlready
 import { throwPreconditionFailedNoAuthCookie } from '@axiumine/koa-utils/graphQL/throw/throwPreconditionFailedNoAuthCookie'
 import { throwPreconditionFailedNoAuthHeader } from '@axiumine/koa-utils/graphQL/throw/throwPreconditionFailedNoAuthHeader'
 import { verifySignedRefreshToken } from '@axiumine/koa-utils/koa/middleware/authenticatedAuthorizationHandler/verifySignedRefreshToken'
+import { constantTimeEquals } from '@axiumine/marketplace-common/others/constantTimeEquals'
 import { isIntrospectionBypassAllowed } from '@axiumine/marketplace-common/others/isIntrospectionBypassAllowed'
 import * as dotenv from 'dotenv'
 import Keygrip from 'keygrip'
@@ -35,10 +36,13 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 		//
 		// This handler checks twice, once here for the cookie and once below for the Authorization header,
 		// and both checks are gated: a request carrying neither is exactly the shape the bypass admits.
+		//
+		// Both comparisons are `constantTimeEquals`, never `===` (E13-S03): string equality stops at the first
+		// differing character, and that gradient is a working oracle for the configured value.
 		if (
 			isIntrospectionBypassAllowed() &&
 			typeof ctx.request.header !== 'undefined' &&
-			ctx.request.header['x-introspectioncode'] === `${process.env.INTROSPECTION_CODE}`
+			constantTimeEquals(ctx.request.header['x-introspectioncode'], `${process.env.INTROSPECTION_CODE}`)
 		) {
 			introspection = true
 		} else {
@@ -62,7 +66,7 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 			isIntrospectionBypassAllowed() &&
 			// Stryker disable next-line ConditionalExpression,StringLiteral: always true here — see comment above
 			typeof ctx.request.header !== 'undefined' &&
-			ctx.request.header['x-introspectioncode'] === `${process.env.INTROSPECTION_CODE}`
+			constantTimeEquals(ctx.request.header['x-introspectioncode'], `${process.env.INTROSPECTION_CODE}`)
 		) {
 			introspection = true
 		} else {
