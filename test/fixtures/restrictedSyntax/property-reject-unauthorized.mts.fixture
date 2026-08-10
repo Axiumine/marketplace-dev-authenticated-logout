@@ -1,0 +1,2 @@
+// The object-literal form, the one a reader expects a ban on this to be written against.
+export const agentOptions = { rejectUnauthorized: false }

@@ -1,0 +1,49 @@
+import { readFile } from 'node:fs/promises'
+
+import { sentryBeforeSend } from '@axiumine/marketplace-common/others/sentryBeforeSend'
+import { describe, expect, it } from 'vitest'
+
+/*
+ * E12-S05 — the guard that fires when the Sentry SDK moves under this configuration.
+ *
+ * Everything `src/instrument.mts` asserts about the SDK was read out of `node_modules` at 10.69.0:
+ * that supplying `dataCollection` at all swaps the base for the fully permissive `DEFAULTS`, that `[]`
+ * is the documented "collect no bodies" value, that `graphQL.variables` is on in both branches of the
+ * legacy mapping, and that the client address is written onto the server span outside the whole
+ * mechanism. None of that is a documented API contract, and the blanket PII flag the mapping starts
+ * from is deprecated and removed in v11. A guard written against a moving SDK stops guarding the day
+ * the dependency bumps, silently — which is the failure this test exists to make loud.
+ *
+ * It pins the exact version rather than the major, because one of those claims is a *minor*-version
+ * detail. `SENSITIVE_KEY_SNIPPETS` is what makes an `authorization` header arrive `[Filtered]` today,
+ * it lives in `@sentry/core/build/esm/utils/data-collection/filtering-snippets.js`, it is exported from
+ * no public entry point, and a minor release may add to it, drop from it or move the file without
+ * anything here failing. The platform must never be reduced on the strength of that list, and the
+ * second case below is what proves it is not: the scrubber removes the header on its own, with no SDK
+ * involved at all.
+ */
+
+const PINNED = '10.69.0'
+
+const MIGRATION =
+	'E12-S05: the Sentry SDK moved off 10.69.0. Re-read `resolveDataCollectionOptions` and `httpServerSpansIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from.'
+
+const installedVersion = async (name: string): Promise<string> => {
+	const manifest = await readFile(new URL(`../node_modules/@sentry/${name}/package.json`, import.meta.url), 'utf8')
+
+	return (JSON.parse(manifest) as { version: string }).version
+}
+
+describe('the SDK is the version every claim in instrument.mts was read from', () => {
+	it.each(['node', 'core'])('@sentry/%s is pinned to the audited version', async (name) => {
+		expect(await installedVersion(name), MIGRATION).toBe(PINNED)
+	})
+})
+
+describe('the scrubber owes nothing to the SDK filtering anything', () => {
+	it('removes an authorization header no SDK filter ever saw', () => {
+		expect(sentryBeforeSend({ request: { headers: { authorization: 'Bearer 9f2c1b7e' } } })).toStrictEqual({
+			request: { headers: {} }
+		})
+	})
+})
