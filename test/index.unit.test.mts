@@ -22,6 +22,7 @@ const {
 	gracefulShutdown,
 	onUnhandledRejection,
 	onUncaughtException,
+	createServer,
 	start
 } = await import('../src/index.mts')
 
@@ -226,5 +227,25 @@ describe('start (success path)', () => {
 		expect(listen).toHaveBeenCalledExactlyOnceWith({ port: 'x' }, expect.any(Function))
 
 		await srv?.apolloServer.stop()
+	})
+})
+
+// ⚠️ **`app.proxy` off is load-bearing, not an unset default nobody thought about.** With it off,
+// `ctx.ip` is the socket address — nginx's own — so no client address is reachable in this process
+// at all, which is the design: the per-caller rate limit is the edge's (`conf.d/20-rate-limit.conf`
+// keys its zones on `$binary_remote_addr` after `real_ip_header CF-Connecting-IP`), and nothing here
+// can write a visitor's address to Redis, to a log line or to Sentry. Turning it on would silently
+// start trusting `X-Forwarded-For` and start producing real addresses everywhere `ctx.ip` is read.
+// A comment cannot prevent that; this test can, and it is the reason the setting is never assigned.
+describe('app.proxy', () => {
+	it('is off on the constructed Koa app', async () => {
+		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+
+		const { app, apolloServer } = await createServer()
+
+		expect(app.proxy).toBeFalsy()
+
+		await apolloServer.stop()
+		vi.unstubAllEnvs()
 	})
 })
