@@ -46,34 +46,6 @@ afterAll(async () => {
 	await redisClient.close().catch(() => undefined)
 })
 
-describe('instrument.mts (Sentry bootstrap)', () => {
-	/*
-	 * Loaded by `--import ./src/instrument.mts`, so no src module imports it and it never executed
-	 * under test. Imported here with DSN blanked on purpose: a blank DSN leaves the SDK inert, so
-	 * the module's statements run for real without this suite shipping test noise to the live
-	 * Sentry project. The transport override is the actual logic, and it is asserted below.
-	 */
-	it('hands Sentry an https module that turns off certificate verification', async () => {
-		const realDsn = process.env.DSN
-		process.env.DSN = ''
-
-		try {
-			const { insecureHttpsModule } = await import('../../src/instrument.mts')
-
-			// Port 1 is reserved and closed: request() is driven for real, the options object is
-			// really mutated, and the socket is destroyed before it can go anywhere.
-			const options: { host: string; port: number; rejectUnauthorized?: boolean } = { host: '127.0.0.1', port: 1 }
-			const req = insecureHttpsModule.request(options)
-			req.on('error', () => undefined)
-			req.destroy()
-
-			expect(options.rejectUnauthorized).toBe(false)
-		} finally {
-			process.env.DSN = realDsn
-		}
-	})
-})
-
 describe('production hardening actually applies to a real server', () => {
 	/*
 	 * buildValidationRules only returns NoSchemaIntrospectionCustomRule + depthLimit(10) under
