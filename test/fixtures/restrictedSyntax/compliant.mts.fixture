@@ -1,0 +1,8 @@
+// The shape the nine services actually carry. Nothing here may be reported.
+import { sentryBeforeSend } from '@axiumine/marketplace-common/others/sentryBeforeSend'
+
+export const initOptions = {
+	dsn: process.env.DSN,
+	dataCollection: { userInfo: false, httpBodies: [], stackFrameVariables: false },
+	beforeSend: sentryBeforeSend
+}

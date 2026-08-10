@@ -20,6 +20,18 @@ beforeAll(async () => {
 	;({ logout } = await import('../src/graphQLApi/schema/mutations/logout.mts'))
 })
 
+/*
+ * The two shapes every session key now has (E13-S01/S02): the digest of the prefixed token, which is what
+ * writes use, and the token itself, which is what everything wrote before the cutover. Both are deleted on
+ * every logout — the session being revoked may predate the cutover, and dropping only one shape would leave
+ * a usable credential behind after the user has been told they are out.
+ *
+ * The digests are written out as literals, computed elsewhere: a test that hashed the token with the call
+ * the implementation makes would agree with it about any algorithm, including a mutated one.
+ */
+const REFRESH_KEY = 'test:c81b450d77200783f68a3ff41d8ebcbafe2bb8f27bf0458cf5800040dff84cf5'
+const ACCESS_KEY = 'test:c12bbd0040e3933bb83bdb74cbf57db678068b4d380022f9d178022289b3406e'
+
 // minimal ctx: the resolver only uses state.user and cookies.set
 function makeCtx(user: { refreshToken?: string; accessToken?: string }) {
 	return {
@@ -48,22 +60,22 @@ describe('mutations.logout', () => {
 
 		await expect(logout.resolve(null, {}, ctx)).resolves.toBe(true)
 
-		expect(del).toHaveBeenCalledTimes(1)
-		expect(del).toHaveBeenCalledWith('test:refresh:abc')
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
 		expect(ctx.cookies.set).toHaveBeenCalledWith('refresh_token', '', expect.any(Object))
 	})
 
 	it('also deletes the access session when present', async () => {
 		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
 
-		expect(del).toHaveBeenCalledTimes(2)
-		expect(del).toHaveBeenNthCalledWith(2, 'test:access:xyz')
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [ACCESS_KEY], ['test:access:xyz']])
 	})
 
 	it('does not delete the access session if the token is an empty string', async () => {
 		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: '' }))
 
-		expect(del).toHaveBeenCalledTimes(1)
+		// Both refresh shapes and neither access shape — the count alone would now pass on a resolver that
+		// deleted the access session under one shape and skipped the refresh one.
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
 	})
 
 	it('swallows Redis errors, sends them to Sentry and still returns true', async () => {

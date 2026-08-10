@@ -1,0 +1,2 @@
+// The flag E12-S03 removed, in the shape it had in the one service that carried it.
+export const initOptions = { dsn: 'https://public@collector.example/1', sendDefaultPii: true }

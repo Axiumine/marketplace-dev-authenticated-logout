@@ -5,6 +5,9 @@ import { throwAlreadyDone } from '@axiumine/koa-utils/graphQL/throw/throwAlready
 import { throwPreconditionFailedNoAuthCookie } from '@axiumine/koa-utils/graphQL/throw/throwPreconditionFailedNoAuthCookie'
 import { throwPreconditionFailedNoAuthHeader } from '@axiumine/koa-utils/graphQL/throw/throwPreconditionFailedNoAuthHeader'
 import { verifySignedRefreshToken } from '@axiumine/koa-utils/koa/middleware/authenticatedAuthorizationHandler/verifySignedRefreshToken'
+import { constantTimeEquals } from '@axiumine/marketplace-common/others/constantTimeEquals'
+import { isIntrospectionBypassAllowed } from '@axiumine/marketplace-common/others/isIntrospectionBypassAllowed'
+import { readSessionField } from '@axiumine/marketplace-common/others/sessionKeys'
 import * as dotenv from 'dotenv'
 import Keygrip from 'keygrip'
 import { Next } from 'koa'
@@ -26,9 +29,21 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 	// refresh
 	const cookie = ctx.request.header?.cookie // refresh
 	if (typeof cookie === 'undefined') {
+		// ⚠️ The environment gate is evaluated **before** the code is read (E13-S11). Outside `development`
+		// and `test` the bypass does not exist at all, and a caller sending the correct header gets exactly
+		// the error a caller sending nothing gets — a wrong code and a disabled feature must not be
+		// distinguishable from the outside. `INTROSPECTION_CODE` stays in REQUIRED_ENV_VARS regardless:
+		// unset, it stringifies to the literal `'undefined'`, and that word would be the bypass.
+		//
+		// This handler checks twice, once here for the cookie and once below for the Authorization header,
+		// and both checks are gated: a request carrying neither is exactly the shape the bypass admits.
+		//
+		// Both comparisons are `constantTimeEquals`, never `===` (E13-S03): string equality stops at the first
+		// differing character, and that gradient is a working oracle for the configured value.
 		if (
+			isIntrospectionBypassAllowed() &&
 			typeof ctx.request.header !== 'undefined' &&
-			ctx.request.header['x-introspectioncode'] === `${process.env.INTROSPECTION_CODE}`
+			constantTimeEquals(ctx.request.header['x-introspectioncode'], `${process.env.INTROSPECTION_CODE}`)
 		) {
 			introspection = true
 		} else {
@@ -44,10 +59,15 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 	// Stryker disable next-line OptionalChaining: ctx.request.header is always defined here — see comment above
 	const authorization = ctx.request.header?.authorization // access
 	if (typeof authorization === 'undefined') {
+		// Gated as well, and not redundantly: the caller this second check answers is one that *did* send a
+		// cookie and no `Authorization` header, so the block above let it through and this is the only place
+		// its code is read. Outside the allowlist it gets `throwPreconditionFailedNoAuthHeader`, the same
+		// error as a caller that sent no code at all.
 		if (
+			isIntrospectionBypassAllowed() &&
 			// Stryker disable next-line ConditionalExpression,StringLiteral: always true here — see comment above
 			typeof ctx.request.header !== 'undefined' &&
-			ctx.request.header['x-introspectioncode'] === `${process.env.INTROSPECTION_CODE}`
+			constantTimeEquals(ctx.request.header['x-introspectioncode'], `${process.env.INTROSPECTION_CODE}`)
 		) {
 			introspection = true
 		} else {
@@ -57,7 +77,10 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 
 	if (!introspection) {
 		const refreshToken = verifySignedRefreshToken(ctx as unknown as IContextRefresh, keys)
-		const redRefreshSession = await redisClient.hGet(`${process.env.REDIS_KEY}${refreshToken}`, 'id')
+		// Keyed by the digest of the token, with a raw-key fallback for sessions minted before the cutover
+		// (E13-S01/S02). This service is the one that must never miss: a logout that cannot find the session
+		// answers `throwAlreadyDone` and leaves a live credential behind after telling the user they are out.
+		const redRefreshSession = await readSessionField(redisClient, refreshToken, 'id')
 		if (redRefreshSession != null) {
 			ctx.state = {
 				user: {
@@ -71,7 +94,7 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 		// Access Token, optional
 		const accessToken = authorization!.replace('Bearer ', '')
 		if (accessToken !== '') {
-			const redAccessSession = await redisClient.hGet(`${process.env.REDIS_KEY}${accessToken}`, '_id') // 'access:' already present
+			const redAccessSession = await readSessionField(redisClient, accessToken, '_id') // 'access:' already present
 			if (redAccessSession != null) {
 				ctx.state.user.accessToken = accessToken
 			} // else no problem, session could be expired

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
+import { sessionKey } from '@axiumine/marketplace-common/others/sessionKeys'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
 import Keygrip from 'keygrip'
@@ -99,8 +100,8 @@ describe('logout service (integration, real Redis cluster)', () => {
 	it('verifies both sessions in Redis, deletes them and returns true', async () => {
 		const refresh = randomUUID()
 		const accessToken = `access:${randomUUID()}`
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
-		const accessKey = `${REDIS_KEY}${accessToken}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+		const accessKey = sessionKey(accessToken)
 
 		// Seed the sessions the handler expects to find on the live cluster, TTLs included — that
 		// is how the authorization tier writes them, and an expiring key is what has to disappear.
@@ -124,12 +125,35 @@ describe('logout service (integration, real Redis cluster)', () => {
 		expect(cleared?.startsWith('refresh_token=;')).toBe(true)
 	})
 
+	/*
+	 * ⚠️ E13-S02, against the real cluster: a session seeded in the **pre-cutover shape** — the token as
+	 * the key name — is still found and still revoked. This is the case the dual-read exists for, and it
+	 * is the one nothing else can prove: on the deploy that turns hashing on, every session in Redis looks
+	 * exactly like the one seeded here.
+	 *
+	 * ⚠️ **When E13-S10 deletes the fallback, this test goes with it**, and the shape it seeds becomes
+	 * unreadable by design. It is not a regression test for a behaviour that stays.
+	 */
+	it('finds and revokes a session written before the cutover, under the raw key', async () => {
+		const refresh = randomUUID()
+		const rawKey = `${REDIS_KEY}refresh:${refresh}`
+		await redisClient.hSet(rawKey, 'id', 'itest')
+		await redisClient.expire(rawKey, 600)
+
+		const res = await callLogout({ cookie: signedCookie(refresh), authorization: `Bearer access:${randomUUID()}` })
+
+		await expectLoggedOut(res)
+		expect(await redisClient.exists(rawKey)).toBe(0)
+		// The hashed twin was never written, and the logout must not have invented it.
+		expect(await redisClient.exists(sessionKey(`refresh:${refresh}`))).toBe(0)
+	})
+
 	// The handler treats the access session as optional: an access token that already expired off
 	// the cluster is "no problem", and the refresh session still has to go. Only a real cluster can
 	// produce that state — a mock would have to be told to.
 	it('still clears the refresh session when the access token has already expired away', async () => {
 		const refresh = randomUUID()
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
 		await redisClient.hSet(refreshKey, 'id', 'itest')
 
 		const res = await callLogout({
@@ -159,7 +183,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	// distinction; a mock would have to be told to treat "exists" and "has this field" differently.
 	it('answers 204 when the refresh hash exists but lacks the field the handler reads', async () => {
 		const refresh = randomUUID()
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
 		seededKeys.push(refreshKey)
 
 		await redisClient.hSet(refreshKey, 'notId', 'itest')
@@ -181,12 +205,12 @@ describe('logout service (integration, real Redis cluster)', () => {
 	 * before any JS runs, so what arrives is the bare word `Bearer`, and `.replace('Bearer ', '')`
 	 * finds nothing to remove and hands the guard `"Bearer"` — truthy.
 	 *
-	 * The lookup therefore runs, against the literal key `<REDIS_KEY>Bearer`, misses, and the
-	 * request proceeds as an expired-access logout.
+	 * The lookup therefore runs — twice now, against the digest of `Bearer` and then against the raw
+	 * key `<REDIS_KEY>Bearer` — misses both, and the request proceeds as an expired-access logout.
 	 */
 	it('treats a bare `Bearer` as a real token, misses, and still logs out', async () => {
 		const refresh = randomUUID()
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
 		await redisClient.hSet(refreshKey, 'id', 'itest')
 
 		const res = await callLogout({ cookie: signedCookie(refresh), authorization: 'Bearer ' })
@@ -204,7 +228,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	 */
 	it('skips the access-token lookup outright when the Authorization header is present but empty', async () => {
 		const refresh = randomUUID()
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
 		await redisClient.hSet(refreshKey, 'id', 'itest')
 
 		const res = await callLogout({ cookie: signedCookie(refresh), authorization: '' })
@@ -249,7 +273,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	 */
 	it('answers true without deleting anything when the introspection code replaces the session', async () => {
 		const refresh = randomUUID()
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
 		seededKeys.push(refreshKey)
 		await redisClient.hSet(refreshKey, 'id', 'itest')
 
@@ -303,8 +327,8 @@ describe('logout service (integration, real Redis cluster)', () => {
 	it('answers helloLogout over HTTP once the real session checks in authorizationLogoutHandler pass', async () => {
 		const refresh = randomUUID()
 		const accessToken = `access:${randomUUID()}`
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
-		const accessKey = `${REDIS_KEY}${accessToken}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+		const accessKey = sessionKey(accessToken)
 		seededKeys.push(refreshKey, accessKey)
 
 		await redisClient.hSet(refreshKey, 'id', 'itest')

@@ -32,6 +32,13 @@ SOCKETLABS_SERVER_APIKEY=xxxxxx
 REDIRECT_DOMAIN=https://xxxx.tdweb.lan
 
 HIT_STATS=false
+# ⚠️ Development-only, and the gate is code rather than convention (E13-S11): the
+# `x-introspectioncode` header is honoured only when NODE_ENV is exactly `development` or `test`, and
+# refused under every other value — unset, empty, `staging`, `Production`, a typo. In production it
+# does nothing at all, and a request carrying it is answered exactly as one carrying nothing.
+# Still required at boot: unset, `${process.env.INTROSPECTION_CODE}` stringifies to the literal
+# 'undefined', so a service mislabelled as development would hand the bypass to anyone sending that
+# word. Two things have to be wrong before it opens, and this variable is the second.
 INTROSPECTION_CODE='xxx'
 
 KEYGRIP_KEY_1="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

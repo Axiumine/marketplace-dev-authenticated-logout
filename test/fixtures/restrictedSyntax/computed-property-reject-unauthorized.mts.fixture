@@ -1,0 +1,2 @@
+// The computed key: an eslint selector reading `key.name` sees nothing here.
+export const agentOptions = { ['rejectUnauthorized']: false }

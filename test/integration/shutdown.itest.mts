@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 
 import { redisClient, RedisConnect } from '@axiumine/koa-utils/dataSources/Redis'
+import { sessionKey } from '@axiumine/marketplace-common/others/sessionKeys'
+import Keygrip from 'keygrip'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -32,7 +34,13 @@ import { disconnectAllDatabases } from '../../src/lib/db/disconnectAllDatabases.
  */
 
 const REDIS_KEY = process.env.REDIS_KEY as string
-const INTROSPECTION_CODE = process.env.INTROSPECTION_CODE as string
+
+const keys = new Keygrip([process.env.KEYGRIP_KEY_1 as string, process.env.KEYGRIP_KEY_2 as string], 'sha512')
+
+// A refresh cookie the way Koa emits it: the value plus its `.sig` Keygrip signature.
+function signedCookie(refresh: string): string {
+	return `refresh_token=${refresh}; refresh_token.sig=${keys.sign(`refresh_token=${refresh}`)}`
+}
 
 let exitSpy: ReturnType<typeof vi.spyOn>
 
@@ -46,34 +54,6 @@ afterAll(async () => {
 	await redisClient.close().catch(() => undefined)
 })
 
-describe('instrument.mts (Sentry bootstrap)', () => {
-	/*
-	 * Loaded by `--import ./src/instrument.mts`, so no src module imports it and it never executed
-	 * under test. Imported here with DSN blanked on purpose: a blank DSN leaves the SDK inert, so
-	 * the module's statements run for real without this suite shipping test noise to the live
-	 * Sentry project. The transport override is the actual logic, and it is asserted below.
-	 */
-	it('hands Sentry an https module that turns off certificate verification', async () => {
-		const realDsn = process.env.DSN
-		process.env.DSN = ''
-
-		try {
-			const { insecureHttpsModule } = await import('../../src/instrument.mts')
-
-			// Port 1 is reserved and closed: request() is driven for real, the options object is
-			// really mutated, and the socket is destroyed before it can go anywhere.
-			const options: { host: string; port: number; rejectUnauthorized?: boolean } = { host: '127.0.0.1', port: 1 }
-			const req = insecureHttpsModule.request(options)
-			req.on('error', () => undefined)
-			req.destroy()
-
-			expect(options.rejectUnauthorized).toBe(false)
-		} finally {
-			process.env.DSN = realDsn
-		}
-	})
-})
-
 describe('production hardening actually applies to a real server', () => {
 	/*
 	 * buildValidationRules only returns NoSchemaIntrospectionCustomRule + depthLimit(10) under
@@ -82,25 +62,35 @@ describe('production hardening actually applies to a real server', () => {
 	 * schema over real HTTP — a unit call to buildValidationRules() would only prove the array was
 	 * built, not that Apollo enforces it.
 	 *
-	 * The request carries the introspection-bypass header and nothing else: authorizationLogoutHandler
-	 * runs in front of Apollo on this service, and the bypass is what lets the request reach the
-	 * validation stage at all without a real session. Redis is never touched — introspection=true
-	 * short-circuits both of the handler's session lookups — which is why this test needs no seeded
-	 * keys and does not depend on the beforeAll's connection.
+	 * authorizationLogoutHandler runs in front of Apollo on this service, so the request needs a
+	 * credential to reach the validation stage at all. It used to be the `x-introspectioncode` header;
+	 * since E13-S11 that header does nothing outside `development` and `test`, and the whole point of
+	 * booting this server is that it is neither. So the request carries a real signed refresh cookie
+	 * and the session hash behind it, exactly as a logged-in caller would — which also makes the
+	 * assertion stronger: introspection is refused for an authenticated caller, not merely for an
+	 * unauthenticated one.
 	 */
 	it('refuses introspection when booted as production', async () => {
 		const realNodeEnv = process.env.NODE_ENV
 		process.env.NODE_ENV = 'production'
 
+		// The session a logout request is made against: the handler verifies the cookie's signature and
+		// then reads this hash. `refresh:` is part of the key because verifySignedRefreshToken returns
+		// the token already prefixed.
+		const refresh = randomUUID()
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {
+			await redisClient.hSet(refreshKey, 'id', 'itest')
+
 			server = await createServer()
 			await new Promise<void>((resolve) => server!.httpServer.listen({ port: 0 }, () => resolve()))
 			const { port } = server.httpServer.address() as AddressInfo
 
 			const res = await fetch(`http://127.0.0.1:${port}${ENDPOINT}`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', 'x-introspectioncode': INTROSPECTION_CODE },
+				headers: { 'content-type': 'application/json', cookie: signedCookie(refresh), authorization: 'Bearer ' },
 				body: JSON.stringify({ query: '{ __schema { queryType { name } } }' })
 			})
 			const json = (await res.json()) as { data?: unknown; errors?: Array<{ message: string }> }
@@ -109,6 +99,7 @@ describe('production hardening actually applies to a real server', () => {
 			expect(json.errors?.[0]?.message).toMatch(/introspection/i)
 		} finally {
 			process.env.NODE_ENV = realNodeEnv
+			await redisClient.del(refreshKey)
 			if (server) {
 				await server.apolloServer.stop()
 				await new Promise<void>((resolve) => server!.httpServer.close(() => resolve()))

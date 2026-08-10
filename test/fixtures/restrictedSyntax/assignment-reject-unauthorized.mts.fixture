@@ -1,0 +1,4 @@
+// The exact shape the audit found in `src/instrument.mts`: an assignment, not an object literal.
+export function request(options: Record<string, unknown>): void {
+	options.rejectUnauthorized = false
+}

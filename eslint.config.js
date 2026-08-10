@@ -58,5 +58,57 @@ export default [
 			'simple-import-sort/imports': 'error',
 			'simple-import-sort/exports': 'error'
 		}
+	},
+	// E12-S04 — neither setting this audit removed can come back by accident.
+	//
+	// Core `no-restricted-syntax`, in this file rather than in `@axiumine/eslint-config-be`: the shared
+	// package is a repo outside these sixteen and ships to unrelated consumers, so a Sentry-specific rule
+	// there would cost a publish, a version bump in ten dependents, and a rule everyone else carries for
+	// nothing. One block duplicated into ten repos is the cheaper half of that trade, and it follows the
+	// idiom the two blocks above already established.
+	//
+	// No `files` key, so this applies to every file eslint looks at here. Three selectors for
+	// `rejectUnauthorized` because the defect actually in the tree was an assignment
+	// (`options.rejectUnauthorized = false`), not an object literal — a `Property`-only rule passes the
+	// exact code it exists to catch — and the computed form has a `key.value` where the plain one has a
+	// `key.name`. Two for `NODE_TLS_REJECT_UNAUTHORIZED` for the same reason one level up:
+	// `process.env.X` parses as an Identifier, `process.env['X']` as a Literal, and a rule carrying one
+	// misses the other.
+	{
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
+					message:
+						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+				},
+				{
+					selector: "Property[key.name='rejectUnauthorized']",
+					message:
+						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+				},
+				{
+					selector: "Property[key.value='rejectUnauthorized']",
+					message:
+						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+				},
+				{
+					selector: "Property[key.name='sendDefaultPii']",
+					message:
+						'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
+				},
+				{
+					selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
+					message:
+						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+				},
+				{
+					selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
+					message:
+						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+				}
+			]
+		}
 	}
 ]
