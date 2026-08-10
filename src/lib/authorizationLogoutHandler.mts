@@ -5,6 +5,7 @@ import { throwAlreadyDone } from '@axiumine/koa-utils/graphQL/throw/throwAlready
 import { throwPreconditionFailedNoAuthCookie } from '@axiumine/koa-utils/graphQL/throw/throwPreconditionFailedNoAuthCookie'
 import { throwPreconditionFailedNoAuthHeader } from '@axiumine/koa-utils/graphQL/throw/throwPreconditionFailedNoAuthHeader'
 import { verifySignedRefreshToken } from '@axiumine/koa-utils/koa/middleware/authenticatedAuthorizationHandler/verifySignedRefreshToken'
+import { isIntrospectionBypassAllowed } from '@axiumine/marketplace-common/others/isIntrospectionBypassAllowed'
 import * as dotenv from 'dotenv'
 import Keygrip from 'keygrip'
 import { Next } from 'koa'
@@ -26,7 +27,16 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 	// refresh
 	const cookie = ctx.request.header?.cookie // refresh
 	if (typeof cookie === 'undefined') {
+		// ⚠️ The environment gate is evaluated **before** the code is read (E13-S11). Outside `development`
+		// and `test` the bypass does not exist at all, and a caller sending the correct header gets exactly
+		// the error a caller sending nothing gets — a wrong code and a disabled feature must not be
+		// distinguishable from the outside. `INTROSPECTION_CODE` stays in REQUIRED_ENV_VARS regardless:
+		// unset, it stringifies to the literal `'undefined'`, and that word would be the bypass.
+		//
+		// This handler checks twice, once here for the cookie and once below for the Authorization header,
+		// and both checks are gated: a request carrying neither is exactly the shape the bypass admits.
 		if (
+			isIntrospectionBypassAllowed() &&
 			typeof ctx.request.header !== 'undefined' &&
 			ctx.request.header['x-introspectioncode'] === `${process.env.INTROSPECTION_CODE}`
 		) {
@@ -44,7 +54,12 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 	// Stryker disable next-line OptionalChaining: ctx.request.header is always defined here — see comment above
 	const authorization = ctx.request.header?.authorization // access
 	if (typeof authorization === 'undefined') {
+		// Gated as well, and not redundantly: the caller this second check answers is one that *did* send a
+		// cookie and no `Authorization` header, so the block above let it through and this is the only place
+		// its code is read. Outside the allowlist it gets `throwPreconditionFailedNoAuthHeader`, the same
+		// error as a caller that sent no code at all.
 		if (
+			isIntrospectionBypassAllowed() &&
 			// Stryker disable next-line ConditionalExpression,StringLiteral: always true here — see comment above
 			typeof ctx.request.header !== 'undefined' &&
 			ctx.request.header['x-introspectioncode'] === `${process.env.INTROSPECTION_CODE}`

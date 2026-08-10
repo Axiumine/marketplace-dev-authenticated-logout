@@ -1,7 +1,7 @@
 import type { IContextLogout } from '@axiumine/koa-utils/graphQL/schema/context/IContextLogout'
 import Keygrip from 'keygrip'
 import type { Next } from 'koa'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hGet = vi.fn()
 
@@ -144,5 +144,62 @@ describe('authorizationLogoutHandler', () => {
 
 		await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
 		expect(next).not.toHaveBeenCalled()
+	})
+	/*
+	 * E13-S11, and twice over: this handler consults the code once for the cookie and once for the
+	 * `Authorization` header, so both checks are gated and both are asserted. Outside `development` and
+	 * `test` the code is never read, and each site refuses with the precondition it was already
+	 * refusing with — a caller cannot tell a wrong code from a disabled feature.
+	 */
+	describe('outside the environment allowlist', () => {
+		afterEach(() => {
+			vi.unstubAllEnvs()
+		})
+
+		// Every value below is admitted by the `NODE_ENV !== 'production'` form this gate replaced, and
+		// each is a shape a real deploy produces: a container runtime that exports nothing, a shell that
+		// exports an empty string, a capital letter, a staging box nobody ever classified.
+		it.each([['production'], ['staging'], ['Production'], [''], [undefined]])(
+			'refuses the cookie bypass under NODE_ENV=%o, with the missing-cookie error',
+			async (environment) => {
+				vi.stubEnv('NODE_ENV', environment)
+
+				const ctx = makeCtx({ authorization: 'Bearer access:xyz', 'x-introspectioncode': 'test-introspection-code' })
+
+				await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_COOKIE)
+				expect(hGet).not.toHaveBeenCalled()
+				expect(next).not.toHaveBeenCalled()
+			}
+		)
+
+		// The second site, reached only by a caller that *did* send a cookie: the block above let it
+		// through, so this is the one place its code would have been read.
+		it.each([['production'], ['staging'], ['Production'], [''], [undefined]])(
+			'refuses the header bypass under NODE_ENV=%o, with the missing-header error',
+			async (environment) => {
+				vi.stubEnv('NODE_ENV', environment)
+
+				const ctx = makeCtx({ cookie: signedCookie(), 'x-introspectioncode': 'test-introspection-code' })
+
+				await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_HEADER)
+				expect(hGet).not.toHaveBeenCalled()
+				expect(next).not.toHaveBeenCalled()
+			}
+		)
+
+		// ⚠️ Both refusals are the ones a caller sending no code at all gets, status and description
+		// included: an error of the gate's own would confirm that the code was right.
+		it('refuses each site with the error a request carrying no code gets', async () => {
+			vi.stubEnv('NODE_ENV', 'production')
+
+			await expectRejectionDescription(
+				authorizationLogoutHandler(keys)(makeCtx({ authorization: 'Bearer access:xyz' }), next),
+				NO_AUTH_COOKIE
+			)
+			await expectRejectionDescription(
+				authorizationLogoutHandler(keys)(makeCtx({ cookie: signedCookie() }), next),
+				NO_AUTH_HEADER
+			)
+		})
 	})
 })
