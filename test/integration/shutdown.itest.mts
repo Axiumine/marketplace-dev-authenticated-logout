@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 
 import { redisClient, RedisConnect } from '@axiumine/koa-utils/dataSources/Redis'
+import { sessionKey } from '@axiumine/marketplace-common/others/sessionKeys'
 import Keygrip from 'keygrip'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -77,7 +78,7 @@ describe('production hardening actually applies to a real server', () => {
 		// then reads this hash. `refresh:` is part of the key because verifySignedRefreshToken returns
 		// the token already prefixed.
 		const refresh = randomUUID()
-		const refreshKey = `${REDIS_KEY}refresh:${refresh}`
+		const refreshKey = sessionKey(`refresh:${refresh}`)
 
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {

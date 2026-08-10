@@ -7,6 +7,7 @@ import { throwPreconditionFailedNoAuthHeader } from '@axiumine/koa-utils/graphQL
 import { verifySignedRefreshToken } from '@axiumine/koa-utils/koa/middleware/authenticatedAuthorizationHandler/verifySignedRefreshToken'
 import { constantTimeEquals } from '@axiumine/marketplace-common/others/constantTimeEquals'
 import { isIntrospectionBypassAllowed } from '@axiumine/marketplace-common/others/isIntrospectionBypassAllowed'
+import { readSessionField } from '@axiumine/marketplace-common/others/sessionKeys'
 import * as dotenv from 'dotenv'
 import Keygrip from 'keygrip'
 import { Next } from 'koa'
@@ -76,7 +77,10 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 
 	if (!introspection) {
 		const refreshToken = verifySignedRefreshToken(ctx as unknown as IContextRefresh, keys)
-		const redRefreshSession = await redisClient.hGet(`${process.env.REDIS_KEY}${refreshToken}`, 'id')
+		// Keyed by the digest of the token, with a raw-key fallback for sessions minted before the cutover
+		// (E13-S01/S02). This service is the one that must never miss: a logout that cannot find the session
+		// answers `throwAlreadyDone` and leaves a live credential behind after telling the user they are out.
+		const redRefreshSession = await readSessionField(redisClient, refreshToken, 'id')
 		if (redRefreshSession != null) {
 			ctx.state = {
 				user: {
@@ -90,7 +94,7 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 		// Access Token, optional
 		const accessToken = authorization!.replace('Bearer ', '')
 		if (accessToken !== '') {
-			const redAccessSession = await redisClient.hGet(`${process.env.REDIS_KEY}${accessToken}`, '_id') // 'access:' already present
+			const redAccessSession = await readSessionField(redisClient, accessToken, '_id') // 'access:' already present
 			if (redAccessSession != null) {
 				ctx.state.user.accessToken = accessToken
 			} // else no problem, session could be expired
