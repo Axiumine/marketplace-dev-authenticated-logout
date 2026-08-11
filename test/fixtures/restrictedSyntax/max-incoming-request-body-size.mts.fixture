@@ -1,0 +1,5 @@
+// Any value but 'none' — including the SDK's own default, which is what dropping the key resolves to.
+export const initOptions = {
+	dsn: 'https://public@collector.example/1',
+	integrations: [httpIntegration({ maxIncomingRequestBodySize: 'medium' })]
+}

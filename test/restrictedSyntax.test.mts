@@ -20,6 +20,8 @@ const FIXTURES = new URL('./fixtures/restrictedSyntax/', import.meta.url)
 
 const TLS_MESSAGE = 'E12-S04: certificate verification stays on.'
 const PII_MESSAGE = 'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false.'
+const BODY_MESSAGE = 'E12-S21: the request body is never captured.'
+const HOOKS_MESSAGE = 'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all.'
 
 const lintFixture = async (name: string) => {
 	const code = await readFile(new URL(`${name}.mts.fixture`, FIXTURES), 'utf8')
@@ -35,7 +37,9 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 		['computed-property-reject-unauthorized', TLS_MESSAGE],
 		['send-default-pii', PII_MESSAGE],
 		['member-node-tls-reject-unauthorized', TLS_MESSAGE],
-		['literal-node-tls-reject-unauthorized', TLS_MESSAGE]
+		['literal-node-tls-reject-unauthorized', TLS_MESSAGE],
+		['max-incoming-request-body-size', BODY_MESSAGE],
+		['before-send-without-transaction', HOOKS_MESSAGE]
 	])('reports %s exactly once', async (fixture, expected) => {
 		const messages = await lintFixture(fixture)
 

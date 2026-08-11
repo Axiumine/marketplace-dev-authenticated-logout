@@ -45,22 +45,49 @@ import * as Sentry from '@sentry/node'
  * request bodies, cookies and unfiltered headers on. Every key is written out for that reason, and the
  * arrival of a new one in a future release is caught by E12-S05's version guard.
  *
+ * ⚠️ **`httpBodies` does not stop the request body reaching an event, and never did** (E12-S21, measured).
+ * `@sentry/core` hard-wires `include.data = true` on the requestdata integration
+ * (`integrations/requestdata.js:27-28`, above the comment *"dataCollection.httpBodies gates write-time,
+ * not read-time"*), so the captured bytes are copied onto `event.request.data` whatever `httpBodies`
+ * says — it reaches the `http.request.body.data` **span** attribute and nothing else. The write-time gate
+ * is `maxIncomingRequestBodySize`, whose default is `"medium"`, which is why it is passed below: with it
+ * at `"none"` the body is never captured, so there is nothing for a later hook to have to remove.
+ *
  * `beforeSend` is not made redundant by any of this. `httpServerSpansIntegration` writes the client
  * address straight onto the server span, outside the `dataCollection` machinery entirely, where it is
  * reached by no option here and by neither value of the removed flag — only the scrubber takes it back
  * out. The SDK's own `SENSITIVE_KEY_SNIPPETS` filtering is a second layer and a minor-version
  * implementation detail, never a reason to shorten the scrubber's list.
+ *
+ * ⚠️ **`beforeSendTransaction` is the same function, and both hooks are needed** (E12-S22, measured). The
+ * SDK routes transaction events to the second hook only, and the attributes the scrubber exists for —
+ * `http.client_ip`, `http.user_agent`, `net.peer.ip`, `net.host.ip` — are on the transaction. With one
+ * hook wired, switching on a `tracesSampleRate` would switch the redaction off.
  */
 if (process.env.DSN) {
 	Sentry.init({
 		dsn: process.env.DSN,
+		// E12-S23. Absent, this reads `production` on every stack — measured, on a service that had just
+		// logged "for development" — and Dev events land in the bucket the production alerts are built on.
+		// The fallback is `unknown` rather than `development`: an unset `NODE_ENV` on a real deployment
+		// would otherwise be labelled the one thing it is least likely to be, which is the same defect
+		// pointing the other way. Everything else in the process reads the same variable and treats
+		// anything that is not `production` as not production.
+		environment: process.env.NODE_ENV ?? 'unknown',
+		// E12-S21. This is the gate on the request body, and the only one: see the note above. It goes
+		// through `httpIntegration` because that is the integration the SDK installs by default under the
+		// name `Http`, and a user instance of the same name replaces it. `maxIncomingRequestBodySize` is
+		// its spelling of the option `httpServerIntegration` reads as `maxRequestBodySize`.
+		integrations: [Sentry.httpIntegration({ maxIncomingRequestBodySize: 'none' })],
 		dataCollection: {
 			// The client address is a network-derived value this platform does not capture (E12-S06); this
 			// is the switch that stops the SDK inferring one from the forwarding headers for `event.user`.
 			userInfo: false,
 			cookies: false,
 			httpHeaders: { request: false, response: false },
-			// `[]` is the documented "collect no bodies" value. An omitted key would collect all four.
+			// `[]` is the documented "collect no bodies" value, and it holds for the span attribute alone —
+			// the event body is stopped by `maxIncomingRequestBodySize` above. An omitted key would
+			// collect all four.
 			httpBodies: [],
 			urlQueryParams: false,
 			// The document keeps its literal values redacted at collection time, so the query shape, the
@@ -77,6 +104,7 @@ if (process.env.DSN) {
 			// integration does, so this keeps stack context exactly as it is today.
 			frameContextLines: 7
 		},
-		beforeSend: sentryBeforeSend
+		beforeSend: sentryBeforeSend,
+		beforeSendTransaction: sentryBeforeSend
 	})
 }

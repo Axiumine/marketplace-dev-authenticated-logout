@@ -98,6 +98,22 @@ export default [
 					message:
 						'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
 				},
+				// E12-S21 / E12-S22. Two settings one word from being reversed, with nothing else that would
+				// notice. `!=` rather than a positive match because the shape to refuse is *any other
+				// value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
+				// and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
+				// `beforeSend` cannot satisfy it on the outer literal's behalf.
+				{
+					selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
+					message:
+						"E12-S21: the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
+				},
+				{
+					selector:
+						"ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
+					message:
+						'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
+				},
 				{
 					selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
 					message:

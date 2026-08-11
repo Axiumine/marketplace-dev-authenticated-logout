@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest'
 const PINNED = '10.69.0'
 
 const MIGRATION =
-	'E12-S05: the Sentry SDK moved off 10.69.0. Re-read `resolveDataCollectionOptions` and `httpServerSpansIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from.'
+	'E12-S05: the Sentry SDK moved off 10.69.0. Re-read `resolveDataCollectionOptions`, `httpServerSpansIntegration` and `httpServerIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from. E12-S21: `maxIncomingRequestBodySize` defaults to `"medium"` and the default is the defect — check the name still forwards to `httpServerIntegration`s `maxRequestBodySize`, and that `include.data` on the requestdata integration is still what makes the body an event field.'
 
 const installedVersion = async (name: string): Promise<string> => {
 	const manifest = await readFile(new URL(`../node_modules/@sentry/${name}/package.json`, import.meta.url), 'utf8')
@@ -35,7 +35,9 @@ const installedVersion = async (name: string): Promise<string> => {
 }
 
 describe('the SDK is the version every claim in instrument.mts was read from', () => {
-	it.each(['node', 'core'])('@sentry/%s is pinned to the audited version', async (name) => {
+	// `node-core` joins the two: it owns `httpServerIntegration`, where the request-body default lives and
+	// where the option `src/instrument.mts` passes is really read. It ships on its own version line.
+	it.each(['node', 'core', 'node-core'])('@sentry/%s is pinned to the audited version', async (name) => {
 		expect(await installedVersion(name), MIGRATION).toBe(PINNED)
 	})
 })
@@ -44,6 +46,15 @@ describe('the scrubber owes nothing to the SDK filtering anything', () => {
 	it('removes an authorization header no SDK filter ever saw', () => {
 		expect(sentryBeforeSend({ request: { headers: { authorization: 'Bearer 9f2c1b7e' } } })).toStrictEqual({
 			request: { headers: {} }
+		})
+	})
+
+	// E12-S21's second layer. `maxIncomingRequestBodySize: 'none'` is what stops the bytes being captured;
+	// this is what removes them from an event that somehow carries them anyway — a hook the SDK calls with
+	// a body it collected under a different option, or a default that moves on a bump.
+	it('removes a request body no SDK option was asked to withhold', () => {
+		expect(sentryBeforeSend({ request: { data: '{"variables":{"password":"sentinel"}}' } })).toStrictEqual({
+			request: {}
 		})
 	})
 })

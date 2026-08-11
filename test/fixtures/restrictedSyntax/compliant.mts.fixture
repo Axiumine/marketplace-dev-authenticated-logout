@@ -3,6 +3,9 @@ import { sentryBeforeSend } from '@axiumine/marketplace-common/others/sentryBefo
 
 export const initOptions = {
 	dsn: process.env.DSN,
+	environment: process.env.NODE_ENV ?? 'unknown',
+	integrations: [httpIntegration({ maxIncomingRequestBodySize: 'none' })],
 	dataCollection: { userInfo: false, httpBodies: [], stackFrameVariables: false },
-	beforeSend: sentryBeforeSend
+	beforeSend: sentryBeforeSend,
+	beforeSendTransaction: sentryBeforeSend
 }
