@@ -41,7 +41,15 @@ HIT_STATS=false
 # word. Two things have to be wrong before it opens, and this variable is the second.
 INTROSPECTION_CODE='xxx'
 
-KEYGRIP_KEY_1="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# ⚠️ The key that opens the cookie-signing keys, not a signing key itself (ADR-034). The keys live in
+# one Redis record shared by the five services that sign or read a session cookie; this unwraps it, and
+# a service whose value is not the one the record was written under refuses to boot rather than sign
+# cookies its siblings cannot verify. Base64 of exactly 32 bytes — `openssl rand -base64 32`.
+# The same value in all five services. Rotating the signing keys does NOT require changing this.
+KEYGRIP_KEK="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# ⚠️ Dead since ADR-034 and read by nothing — kept only until E01-S15 sweeps the name out of every
+# template. The signing keys are the Redis record above; editing these two changes nothing.
+KEYGRIP_KEY_1=="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 KEYGRIP_KEY_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # Optional: an empty or missing DSN leaves the Sentry SDK inert and the service still boots.

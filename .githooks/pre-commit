@@ -87,6 +87,11 @@ SECRET_VALUE='npm_[A-Za-z0-9]{36}'
 SECRET_VALUE+='|_authToken[[:space:]]*=[[:space:]]*["'"'"']?([0-9a-f]{8}-[0-9a-f]{4}-|ey[A-Za-z0-9_-]{10,}\.)'
 SECRET_VALUE+='|-----BEGIN [A-Z ]*PRIVATE KEY-----'
 SECRET_VALUE+='|KEYGRIP_KEY_[12][[:space:]]*=[[:space:]]*"[^x"]{40}'
+# ADR-034's KEK, matched on its exact shape rather than on entropy: base64 of 32 bytes is 44 chars and
+# always ends in '='. No `env` template placeholder has that shape — they are x's with no padding, or
+# empty — so the rule cannot fire on one, and a real key cannot slip past by starting with an 'x' the
+# way the [^x] rules above allow.
+SECRET_VALUE+='|KEYGRIP_KEK[[:space:]]*=[[:space:]]*"?[A-Za-z0-9+/]{43}='
 # dotenv style: KEY=<16+ chars>, at line start (a leading + from the diff is stripped first)
 SECRET_VALUE+='|^[[:space:]]*(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)=[^$x[:space:]][^[:space:]]{15,}'
 # code style: KEY = "<16+ chars>" — a quoted literal, never process.env.KEY

@@ -15,6 +15,7 @@ import {
 	onUnhandledRejection
 } from '../../src/index.mts'
 import { disconnectAllDatabases } from '../../src/lib/db/disconnectAllDatabases.mts'
+import { ITEST_KEYGRIP_KEYS } from '../../vitest.keygrip.mts'
 
 /*
  * The process-lifecycle half of the service, exercised against the real Redis cluster.
@@ -35,7 +36,10 @@ import { disconnectAllDatabases } from '../../src/lib/db/disconnectAllDatabases.
 
 const REDIS_KEY = process.env.REDIS_KEY as string
 
-const keys = new Keygrip([process.env.KEYGRIP_KEY_1 as string, process.env.KEYGRIP_KEY_2 as string], 'sha512')
+const keys = new Keygrip(
+	ITEST_KEYGRIP_KEYS.map((key) => key.material),
+	'sha512'
+)
 
 // A refresh cookie the way Koa emits it: the value plus its `.sig` Keygrip signature.
 function signedCookie(refresh: string): string {
@@ -84,7 +88,7 @@ describe('production hardening actually applies to a real server', () => {
 		try {
 			await redisClient.hSet(refreshKey, 'id', 'itest')
 
-			server = await createServer()
+			server = await createServer(ITEST_KEYGRIP_KEYS)
 			await new Promise<void>((resolve) => server!.httpServer.listen({ port: 0 }, () => resolve()))
 			const { port } = server.httpServer.address() as AddressInfo
 
@@ -152,7 +156,7 @@ describe('gracefulShutdown against the real server and the real Redis cluster', 
 		const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
 		try {
-			const { httpServer, apolloServer } = await createServer()
+			const { httpServer, apolloServer } = await createServer(ITEST_KEYGRIP_KEYS)
 			await new Promise<void>((resolve) => httpServer.listen({ port: 0 }, () => resolve()))
 
 			// Live before, so the assertions after mean something.

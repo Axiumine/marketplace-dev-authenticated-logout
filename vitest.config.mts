@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 
+import { ITEST_REDIS_KEY } from './vitest.keygrip.mts'
 import { nodeNextResolver } from './vitest.shared.mts'
 
 // graphql throws "Duplicate graphql modules / from another realm" when a transformed copy
@@ -68,9 +69,15 @@ export default defineConfig({
 					// Redis ACL grants the test user exactly that pattern — a new top-level prefix would be
 					// denied. `fileParallelism: false` below is a different axis and still required: files
 					// inside one service share its throwaway database.
+					// ⚠️ Seeds the keygrip record and mints the KEK the workers inherit (ADR-034). Without it
+					// start() refuses to boot, correctly, and every file in the project fails.
+					globalSetup: ['./test/integration/globalSetup.mts'],
 					env: {
 						NODE_ENV: 'test',
-						REDIS_KEY: 'marketplaceDev:itest:authenticatedLogout:',
+						// ⚠️ Imported, not written here: globalSetup writes the keygrip record into this
+						// namespace from a different process, and a prefix typed twice is a prefix that can be
+						// edited once.
+						REDIS_KEY: ITEST_REDIS_KEY,
 						INTROSPECTION_CODE: 'test-introspection-code',
 						PORT: '0'
 					},
