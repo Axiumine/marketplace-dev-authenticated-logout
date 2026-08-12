@@ -9,15 +9,19 @@ import Keygrip from 'keygrip'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 // The sources call dotenv.config() transitively (Redis datasource, handler); this is a
-// belt-and-suspenders load so KEYGRIP_KEY_* are present when this file's top level reads them.
+// belt-and-suspenders load so REDIS_* and MONGODB_URI are present when this file's top level reads them.
 dotenv.config()
 
 import { ENDPOINT, start } from '../../src/index.mts'
+import { ITEST_KEYGRIP_KEYS } from '../../vitest.keygrip.mts'
 
 const REDIS_KEY = process.env.REDIS_KEY as string
 const INTROSPECTION_CODE = process.env.INTROSPECTION_CODE as string
 // Must match the server's cookie signer exactly (see createServer): same keys, same SHA-512.
-const keys = new Keygrip([process.env.KEYGRIP_KEY_1 as string, process.env.KEYGRIP_KEY_2 as string], 'sha512')
+const keys = new Keygrip(
+	ITEST_KEYGRIP_KEYS.map((key) => key.material),
+	'sha512'
+)
 
 // A refresh cookie the way Koa emits it: the value plus its `.sig` Keygrip signature.
 function signedCookie(refresh: string): string {

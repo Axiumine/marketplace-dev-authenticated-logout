@@ -68,18 +68,18 @@ describe('start() when Redis genuinely refuses the connection', () => {
 	 * touches Redis, so the still-broken REDIS_PASSWORD from the previous test cannot affect it.
 	 */
 	it('refuses to boot at all, and connects nothing, when a required variable is missing', async () => {
-		const realKey = process.env.KEYGRIP_KEY_1
-		delete process.env.KEYGRIP_KEY_1
+		const realKek = process.env.KEYGRIP_KEK
+		delete process.env.KEYGRIP_KEK
 
 		try {
 			const { start } = await import('../../src/index.mts')
 			const { redisClient } = await import('@axiumine/koa-utils/dataSources/Redis')
 
-			await expect(start()).rejects.toThrow('Missing required environment variable: KEYGRIP_KEY_1')
+			await expect(start()).rejects.toThrow('Missing required environment variable: KEYGRIP_KEK')
 
 			expect(redisClient.isOpen).toBe(false)
 		} finally {
-			process.env.KEYGRIP_KEY_1 = realKey
+			process.env.KEYGRIP_KEK = realKek
 		}
 	})
 })
