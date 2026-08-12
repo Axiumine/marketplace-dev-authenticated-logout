@@ -28,6 +28,9 @@ function signedCookie(refresh: string): string {
 	return `refresh_token=${refresh}; refresh_token.sig=${keys.sign(`refresh_token=${refresh}`)}`
 }
 
+let keygripWatch: NodeJS.Timeout
+let keygripSubscriber: { close(): Promise<unknown> }
+
 let httpServer: Server
 let base: string
 
@@ -43,6 +46,11 @@ beforeAll(async () => {
 	const server = await start()
 	if (!server) throw new Error('server failed to start against the real Redis cluster')
 	httpServer = server.httpServer
+	// Both belong to the live key watch (ADR-034), and both have to be handed back for the drain below:
+	// the timer is unref'd but still fires while the suite runs, and the subscriber is a second
+	// connection nothing else in this file knows about.
+	keygripWatch = server.keygripWatch
+	keygripSubscriber = server.keygripSubscriber
 	const address = httpServer.address() as AddressInfo | null
 	if (!address || typeof address === 'string') throw new Error('no TCP address on the booted server')
 	base = `http://127.0.0.1:${address.port}`
@@ -62,6 +70,10 @@ async function drainSafely(what: string, remove: () => Promise<unknown>) {
 }
 
 afterAll(async () => {
+	// The watch first: a poll that fires against a closing client would report an error nobody caused.
+	clearInterval(keygripWatch)
+	await drainSafely('keygrip subscriber', () => keygripSubscriber.close())
+
 	await new Promise<void>((resolve) => httpServer.close(() => resolve()))
 	// Cluster: one key per del() call, never a multi-key del (CROSSSLOT).
 	for (const key of seededKeys) {

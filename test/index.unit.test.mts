@@ -7,6 +7,7 @@ const captureMessage = vi.fn()
 const RedisConnect = vi.fn()
 const disconnectAllDatabases = vi.fn()
 const loadKeygrip = vi.fn()
+const watchKeygrip = vi.fn()
 
 // Two 64-byte keys, newest first, exactly as loadKeygrip answers. Written as bytes: nothing here is a
 // real signing key, and the pair has to be distinguishable so the order can be asserted.
@@ -15,9 +16,19 @@ const KEYS = [
 	{ id: 'k1', material: Buffer.alloc(64, 34).toString('base64'), createdAt: '2026-05-01T08:00:00.000Z' }
 ]
 
+// The connection watchKeygrip subscribes on. Identifiable for the same reason redisClient is: the
+// assertion that matters is that it is the DUPLICATE and not the shared client.
+const subscriber = { id: 'redis-subscriber', connect: vi.fn() }
+
 // Identifiable, so the call to loadKeygrip can be asserted to have received THIS client rather than
 // merely something object-shaped.
-const redisClient = { id: 'redis-client' }
+const redisClient = { id: 'redis-client', duplicate: vi.fn(() => subscriber) }
+
+// What a rotation hands back: a key this process has never signed with in front of the ones it has.
+const ROTATED_KEYS = [
+	{ id: 'k3', material: Buffer.alloc(64, 51).toString('base64'), createdAt: '2026-08-12T11:02:00.000Z' },
+	...KEYS
+]
 
 vi.mock('@sentry/node', () => ({ captureException, captureMessage }))
 // redisClient is imported transitively by the handler / resolvers; a bare stub is enough
@@ -29,6 +40,11 @@ vi.mock('@lib/db/disconnectAllDatabases.mjs', () => ({ disconnectAllDatabases })
 // name, right after the connect, and that its refusal is as fatal as a datasource failure — asserted
 // on both arms below.
 vi.mock('@axiumine/marketplace-common/others/loadKeygrip', () => ({ loadKeygrip }))
+// Mocked so the boot can be asserted without a live subscription: the watch's own behaviour — the
+// version comparison, the poll, the holders heartbeat — is unit-tested in marketplace-common against a
+// fake store. What start() owes it is the right arguments and the two callbacks, asserted below by
+// calling them.
+vi.mock('@axiumine/marketplace-common/others/watchKeygrip', () => ({ watchKeygrip }))
 
 const {
 	ENDPOINT,
@@ -208,6 +224,9 @@ describe('start (failure path)', () => {
 		disconnectAllDatabases.mockReset()
 		RedisConnect.mockReset()
 		loadKeygrip.mockReset().mockResolvedValue({ version: 1, fp: 'c77808de4139', keys: KEYS })
+		watchKeygrip.mockReset().mockResolvedValue(undefined)
+		subscriber.connect.mockReset().mockResolvedValue(undefined)
+		redisClient.duplicate.mockClear()
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
 		errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 	})
@@ -244,6 +263,25 @@ describe('start (failure path)', () => {
 		expect(captureException).toHaveBeenCalledWith(error)
 		expect(disconnectAllDatabases).toHaveBeenCalledWith(1)
 	})
+
+	/*
+	 * ⚠️ Booting deaf is not an option either. A process that could read the record once but cannot hold a
+	 * subscription would keep reading — and clearing — cookies against the key set it started with, through
+	 * every rotation, for as long as it runs. Fatal, and fatal *before* listen(), so no request is ever
+	 * served by a deaf process.
+	 */
+	it('reports to Sentry and disconnects with code 1 when the subscriber connection cannot be opened', async () => {
+		const error = new Error('subscriber boom')
+		RedisConnect.mockResolvedValueOnce(undefined)
+		subscriber.connect.mockRejectedValueOnce(error)
+
+		await start()
+
+		expect(watchKeygrip).not.toHaveBeenCalled()
+		expect(errorLog).toHaveBeenCalledExactlyOnceWith('error', error)
+		expect(captureException).toHaveBeenCalledWith(error)
+		expect(disconnectAllDatabases).toHaveBeenCalledWith(1)
+	})
 })
 
 describe('start (success path)', () => {
@@ -258,6 +296,9 @@ describe('start (success path)', () => {
 		disconnectAllDatabases.mockReset()
 		RedisConnect.mockReset()
 		loadKeygrip.mockReset().mockResolvedValue({ version: 1, fp: 'c77808de4139', keys: KEYS })
+		watchKeygrip.mockReset().mockResolvedValue(undefined)
+		subscriber.connect.mockReset().mockResolvedValue(undefined)
+		redisClient.duplicate.mockClear()
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
 		info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
 		listen = vi
@@ -301,6 +342,83 @@ describe('start (success path)', () => {
 
 		expect(loadKeygrip).toHaveBeenCalledExactlyOnceWith(redisClient, SERVICE_NAME)
 		expect(RedisConnect.mock.invocationCallOrder[0]).toBeLessThan(loadKeygrip.mock.invocationCallOrder[0])
+
+		await srv?.apolloServer.stop()
+	})
+
+	/*
+	 * ⚠️ Armed on a connection of its own, with the version the boot read, before the socket opens. Each
+	 * of those three is a way this can be wired wrongly and still look right: the shared client would
+	 * break every session read the moment a message arrives, a hard-coded starting version would make the
+	 * first rotation invisible or replay one that already landed, and arming it after `listen()` leaves a
+	 * window where this process reads cookies against keys it will never learn to stop using.
+	 */
+	it('watches the record on a duplicated connection, from the version it booted with, before it listens', async () => {
+		RedisConnect.mockResolvedValueOnce(undefined)
+
+		const srv = await start()
+
+		expect(redisClient.duplicate).toHaveBeenCalledExactlyOnceWith()
+		expect(subscriber.connect).toHaveBeenCalledExactlyOnceWith()
+		expect(watchKeygrip).toHaveBeenCalledExactlyOnceWith({
+			store: redisClient,
+			subscriber,
+			serviceName: SERVICE_NAME,
+			version: 1,
+			fp: 'c77808de4139',
+			onKeys: expect.any(Function),
+			onError: expect.any(Function)
+		})
+		expect(watchKeygrip.mock.invocationCallOrder[0]).toBeLessThan(listen.mock.invocationCallOrder[0])
+
+		await srv?.apolloServer.stop()
+	})
+
+	/*
+	 * The rotation, as this process experiences it: no restart, no reconnect, a new array in `app.keys`.
+	 * Asserted through a signature because `Keygrip` keeps its keys private — and a signature is also what
+	 * proves the *material* reached it in the right order, rather than the ids or the whole objects.
+	 */
+	it('rebuilds the signing keys in place when the watch reports a new record', async () => {
+		RedisConnect.mockResolvedValueOnce(undefined)
+
+		const srv = await start()
+		const { onKeys } = watchKeygrip.mock.calls[0][0] as {
+			onKeys: (record: { version: number; fp: string; keys: typeof KEYS }) => void
+		}
+		// `app.keys` is typed `Keygrip | string[]` by Koa; this service only ever assigns the first.
+		const signing = () => srv?.app.keys as Keygrip
+
+		expect(signing().sign('session-cookie')).toBe(new Keygrip([KEYS[0].material], 'sha512').sign('session-cookie'))
+
+		onKeys({ version: 2, fp: '0b1d9f2c4a77', keys: ROTATED_KEYS })
+
+		// Reads and clears cookies with the key that did not exist a line ago...
+		expect(signing().sign('session-cookie')).toBe(new Keygrip([ROTATED_KEYS[0].material], 'sha512').sign('session-cookie'))
+		// ...and still verifies the one it was signing with, which is what lets a logout invalidate a
+		// cookie issued before the rotation instead of answering "not yours".
+		expect(signing().index('session-cookie', new Keygrip([KEYS[0].material], 'sha512').sign('session-cookie'))).toBe(1)
+
+		await srv?.apolloServer.stop()
+	})
+
+	/*
+	 * ⚠️ Reported and dropped, never thrown. `onError` runs on a socket callback and on a timer, where a
+	 * throw is an unhandled rejection that kills a process which is serving perfectly well on keys every
+	 * sibling still verifies. Losing the ability to re-read is a Sentry event, not an outage.
+	 */
+	it('reports a failed re-read to Sentry without taking the service down', async () => {
+		RedisConnect.mockResolvedValueOnce(undefined)
+
+		const srv = await start()
+		const { onError } = watchKeygrip.mock.calls[0][0] as { onError: (error: unknown) => void }
+		const error = new Error('KEYGRIP_KEK_MISMATCH: this service cannot unwrap keygrip record version 4 (0b1d9f2c4a77).')
+
+		captureException.mockClear()
+		expect(() => onError(error)).not.toThrow()
+
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(error)
+		expect(disconnectAllDatabases).not.toHaveBeenCalled()
 
 		await srv?.apolloServer.stop()
 	})
