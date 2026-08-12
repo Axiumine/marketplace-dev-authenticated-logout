@@ -47,10 +47,6 @@ INTROSPECTION_CODE='xxx'
 # cookies its siblings cannot verify. Base64 of exactly 32 bytes — `openssl rand -base64 32`.
 # The same value in all five services. Rotating the signing keys does NOT require changing this.
 KEYGRIP_KEK="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-# ⚠️ Dead since ADR-034 and read by nothing — kept only until E01-S15 sweeps the name out of every
-# template. The signing keys are the Redis record above; editing these two changes nothing.
-KEYGRIP_KEY_1=="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-KEYGRIP_KEY_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # Optional: an empty or missing DSN leaves the Sentry SDK inert and the service still boots.
 # Deliberately absent from REQUIRED_ENV_VARS in src/index.mts — do not add it back.

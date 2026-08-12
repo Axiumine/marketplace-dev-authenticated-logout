@@ -8,6 +8,83 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort'
 // TypeScript block, but without `project`: tsconfig.json only includes `src/**/*.mts`.
 const sharedTsBlock = eslintConfig.find((c) => c.files?.includes('src/**/*.{d.ts,ts,cts,mts}'))
 
+/*
+ * E01-S15. The pair ADR-034 replaced, refused by name so that "nothing reads them" stops being a claim
+ * about how the code happens to be written today. The signing keys are one Redis record wrapped under
+ * KEYGRIP_KEK; a service that read KEYGRIP_KEY_1 out of its environment again would sign cookies with a
+ * key its siblings do not have, and the failure is a browser that is silently logged out rather than an
+ * error anybody sees.
+ *
+ * Two selectors because `process.env.X` parses as an Identifier and `process.env['X']` as a Literal —
+ * the same reason the NODE_TLS_REJECT_UNAUTHORIZED pair above carries two. Both are anchored on
+ * `process.env` rather than on the bare name: KEYGRIP_KEY_BYTES is a live constant in
+ * marketplace-common, and a rule matching the prefix everywhere would refuse it.
+ *
+ * Scoped to `src/**` where it is used below: test/index.unit.test.mts asserts these very names are
+ * absent from REQUIRED_ENV_VARS, and a repo-wide ban would refuse the test that proves the story.
+ */
+const KEYGRIP_KEY_NO_ENV_READ = [
+	{
+		selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.name=/^KEYGRIP_KEY_/]",
+		message:
+			'E01-S15: KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034. The cookie-signing keys are the Redis record at <REDIS_KEY>keygrip, unwrapped with KEYGRIP_KEK by loadKeygrip in marketplace-common — an env read here signs cookies the other services cannot verify.'
+	},
+	{
+		selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.value=/^KEYGRIP_KEY_/]",
+		message:
+			'E01-S15: KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034. The cookie-signing keys are the Redis record at <REDIS_KEY>keygrip, unwrapped with KEYGRIP_KEK by loadKeygrip in marketplace-common — an env read here signs cookies the other services cannot verify.'
+	}
+]
+
+/* Hoisted so both config objects below can share it — see the note above the second one. */
+const RESTRICTED_SYNTAX = [
+	{
+		selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Property[key.name='rejectUnauthorized']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Property[key.value='rejectUnauthorized']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Property[key.name='sendDefaultPii']",
+		message:
+			'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
+	},
+	// E12-S21 / E12-S22. Two settings one word from being reversed, with nothing else that would
+	// notice. `!=` rather than a positive match because the shape to refuse is *any other
+	// value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
+	// and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
+	// `beforeSend` cannot satisfy it on the outer literal's behalf.
+	{
+		selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
+		message:
+			"E12-S21: the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
+	},
+	{
+		selector: "ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
+		message:
+			'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
+	},
+	{
+		selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	}
+]
+
 export default [
 	// `.stryker-tmp/**` and `reports/**` are build output, not sources. Stryker copies the whole
 	// repo into a sandbox under .stryker-tmp and only removes it on a clean exit — an interrupted
@@ -76,55 +153,16 @@ export default [
 	// misses the other.
 	{
 		rules: {
-			'no-restricted-syntax': [
-				'error',
-				{
-					selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Property[key.name='rejectUnauthorized']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Property[key.value='rejectUnauthorized']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Property[key.name='sendDefaultPii']",
-					message:
-						'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
-				},
-				// E12-S21 / E12-S22. Two settings one word from being reversed, with nothing else that would
-				// notice. `!=` rather than a positive match because the shape to refuse is *any other
-				// value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
-				// and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
-				// `beforeSend` cannot satisfy it on the outer literal's behalf.
-				{
-					selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
-					message:
-						"E12-S21: the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
-				},
-				{
-					selector:
-						"ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
-					message:
-						'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
-				},
-				{
-					selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				}
-			]
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX]
+		}
+	},
+	// The keygrip ban rides on top of the shared entries rather than replacing them: a second config
+	// object naming the same rule discards the first one's options for every file it matches, so
+	// dropping the spread would silently un-ban every Sentry and TLS selector inside src/**.
+	{
+		files: ['src/**/*.mts'],
+		rules: {
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...KEYGRIP_KEY_NO_ENV_READ]
 		}
 	}
 ]

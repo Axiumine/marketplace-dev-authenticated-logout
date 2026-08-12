@@ -321,10 +321,10 @@ describe('logout service (integration, real Redis cluster)', () => {
 		expect(json.description).toBe('Refresh Token Signature Required.')
 	})
 
-	// Same guard, other half: a `.sig` that does not verify against the real KEYGRIP_KEY_1/2 pair
-	// this server was started with. Proves the signer configured in createServer and the one this
-	// file's signedCookie() uses to build valid cookies are the same keys — a wrong or rotated key
-	// would make every "valid" cookie in this suite fail exactly like this one.
+	// Same guard, other half: a `.sig` that does not verify against the key set this server was
+	// started with — the Redis record globalSetup seeded. Proves the signer configured in createServer
+	// and the one this file's signedCookie() uses to build valid cookies are the same keys — a wrong or
+	// rotated key would make every "valid" cookie in this suite fail exactly like this one.
 	it('rejects a refresh cookie that is present but tampered', async () => {
 		const res = await callLogout({
 			cookie: `refresh_token=${randomUUID()}; refresh_token.sig=not-a-real-signature`,

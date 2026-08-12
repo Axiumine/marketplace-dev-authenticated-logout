@@ -1,0 +1,4 @@
+// The pair ADR-034 replaced, dotted form: the name parses as an Identifier.
+const [first] = [process.env.KEYGRIP_KEY_1 ?? '']
+
+export const signWith = first

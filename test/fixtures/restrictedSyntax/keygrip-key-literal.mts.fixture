@@ -1,0 +1,4 @@
+// The same read, computed form: here the name parses as a Literal instead.
+const [second] = [process.env['KEYGRIP_KEY_2'] ?? '']
+
+export const verifyWith = second
