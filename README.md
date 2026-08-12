@@ -29,6 +29,15 @@ with no `Authorization` header, but only the *refresh* session must still exist 
 ⚠️ **Logging out twice is an error, by design.** `throwAlreadyDone` is what a second call gets. Do not
 "fix" it into a silent success: the frontends distinguish the two.
 
+⚠️ **Seed a test session from `test/helpers/sessionFixtures.mts`, never by hand.** The handler's refresh
+lookup asked for a field named `id` for as long as this service existed, and no writer has ever written
+one — the refresh hash is `IRefreshData` and its identity field is `_id`. Every logout on the platform
+therefore hit `throwAlreadyDone` and deleted nothing, while answering the caller with success. It survived
+26 integration tests against a live Redis because each of them seeded the field the *reader* asked for
+(`hSet(refreshKey, 'id', 'itest')`), so the suite agreed with the defect instead of catching it. The
+fixtures are typed as `IRefreshData` / `IRedisDataUser` and shaped like what the login writers actually
+write; a hand-rolled `hSet` in a new test re-opens the same hole.
+
 ⚠️ **The resolver swallows everything into Sentry and returns `true` regardless.** A Redis outage during
 `del` reports a successful logout to the client while the session is still live. That is a deliberate
 trade — the cookie is cleared either way — but it means this mutation's return value is not evidence the
