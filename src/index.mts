@@ -6,6 +6,7 @@ import { IContextLogout } from '@axiumine/koa-utils/graphQL/schema/context/ICont
 import { tdwKoaErrorHandler } from '@axiumine/koa-utils/koa/tdwKoaErrorHandler'
 import { IKeygripKeyMaterial } from '@axiumine/marketplace-common/others/IKeygripKeyMaterial'
 import { loadKeygrip } from '@axiumine/marketplace-common/others/loadKeygrip'
+import { watchKeygrip } from '@axiumine/marketplace-common/others/watchKeygrip'
 import { authorizationLogoutHandler } from '@lib/authorizationLogoutHandler.mjs'
 import { disconnectAllDatabases } from '@lib/db/disconnectAllDatabases.mjs'
 import * as Sentry from '@sentry/node'
@@ -229,9 +230,48 @@ export async function start() {
 		 * arrangement this replaces — its failure mode was users being logged out by whichever service the
 		 * edge happened to pick.
 		 */
-		const { keys: keygripKeys } = await loadKeygrip(redisClient, SERVICE_NAME)
+		const { keys: keygripKeys, version, fp } = await loadKeygrip(redisClient, SERVICE_NAME)
 
-		const { httpServer, apolloServer } = await createServer(keygripKeys)
+		const { app, httpServer, apolloServer } = await createServer(keygripKeys)
+
+		/****************
+		 * Live key adoption (ADR-034)
+		 *
+		 * The half that makes rotation an operator action rather than a deploy: when the record moves, this
+		 * process rebuilds its `Keygrip` in place. Without it the new key would reach this service only at
+		 * the next restart, and the platform would spend that window signing with two different index-0
+		 * keys — the failure the record was introduced to end.
+		 *
+		 * ⚠️ **A second connection, and it must be one.** node-redis refuses ordinary commands on a client
+		 * in subscriber mode, so subscribing on the shared client would break every session read this
+		 * service makes. `duplicate()` inherits the cluster's options and credentials; only `connect()` is
+		 * ours to call.
+		 *
+		 * ⚠️ **Before `listen()`, deliberately.** Nothing may be signed with keys this process is not yet
+		 * watching: a rotation landing between the build and the subscribe would be missed by both paths —
+		 * the message arrives at nobody and the poll starts from a version that is already stale.
+		 *
+		 * `app.keys` is reassigned rather than the `Keygrip` being mutated: the instance is private to
+		 * `cookies`, which reads `app.keys` per request, so a swapped reference is picked up by the next
+		 * request and every in-flight one finishes against the array it started with.
+		 */
+		const keygripSubscriber = redisClient.duplicate()
+		await keygripSubscriber.connect()
+
+		const keygripWatch = await watchKeygrip({
+			store: redisClient,
+			subscriber: keygripSubscriber,
+			serviceName: SERVICE_NAME,
+			version,
+			fp,
+			onKeys: (record) => {
+				app.keys = new Keygrip(
+					record.keys.map((key) => key.material),
+					'sha512'
+				)
+			},
+			onError: (error) => Sentry.captureException(error)
+		})
 
 		/****************
 		 * START SERVER
@@ -251,7 +291,12 @@ export async function start() {
 			)
 		})
 
-		return { httpServer, apolloServer }
+		// `app` travels out with the handles because it is where a rotation lands: everything that reads
+		// the effect of `onKeys` — a test, or a future health probe reporting which fingerprint this
+		// process is signing with — reads `app.keys`. The watch and its connection are returned for the
+		// tests that have to shut a booted service down cleanly; the process itself never stops watching,
+		// and `disconnectAllDatabases` ends with `process.exit`, which takes the subscriber with it.
+		return { app, httpServer, apolloServer, keygripWatch, keygripSubscriber }
 	} catch (error) {
 		console.error('error', error)
 		Sentry.captureException(error) // @fixme does not send the log, verify!
