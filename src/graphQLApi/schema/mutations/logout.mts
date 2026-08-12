@@ -1,7 +1,8 @@
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import type { IContextLogout } from '@axiumine/koa-utils/graphQL/schema/context/IContextLogout'
 import { refreshTokenOptions } from '@axiumine/koa-utils/lib/tokenOptions'
-import { deleteSession } from '@axiumine/marketplace-common/others/sessionKeys'
+import { deleteSession, readSessionHash, unindexSession } from '@axiumine/marketplace-common/others/sessionKeys'
+import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import * as Sentry from '@sentry/node'
 import * as dotenv from 'dotenv'
 import { GraphQLBoolean, GraphQLNonNull } from 'graphql'
@@ -40,6 +41,12 @@ export const logout = {
 		}
 
 		try {
+			// Read before the delete, because the delete is what makes it unreadable: the session hash is the
+			// only thing on the platform that knows which account this token belongs to. This service is
+			// tier-agnostic on purpose — one logout for all three tiers — so it learns the tier the same way,
+			// from the session itself rather than from a constant of its own.
+			const session = { ...(await readSessionHash(redisClient, user.refreshToken)) }
+
 			// delete the access token used to make this call
 			// and, if it still exists, the refresh token too
 			// ⚠️ Both key shapes go, every time (E13-S02). The session being revoked may predate the cutover,
@@ -47,6 +54,20 @@ export const logout = {
 			// one — a logout that leaves the session usable is worse than none, the user has been told they
 			// are out.
 			await deleteSession(redisClient, user.refreshToken)
+
+			// ⚠️ **After the delete, never before** (E15-S03). Unfiled first, a still-usable refresh token is
+			// listed nowhere for the width of the window between the two calls, and a revocation running in it
+			// misses the session entirely. This order can only leave a row naming a key that is already gone,
+			// and the field's own TTL removes that row even if this call never runs.
+			//
+			// Both fields are checked rather than assumed: `indexSession` writes an `_id` and a tier into every
+			// row it creates, so a hash carrying neither was never indexed — a session minted before E15-S02,
+			// or the empty hash `readSessionHash` answers when both key shapes miss. Passing the string
+			// `'undefined'` on into a key name would build `idx:undefined:undefined` and delete from it.
+			const tier = Object.values(TIER).find((known) => known === session.tier)
+			if (tier !== undefined && session._id !== undefined) {
+				await unindexSession(redisClient, user.refreshToken, { _id: session._id, tier })
+			}
 			// The access token is optional on the session this service writes: `authorizationLogoutHandler`
 			// sets it only when the header carried one *and* its session was still in Redis. Both halves are
 			// load-bearing — `undefined` reaches the key builder as the literal `'undefined'` and would delete
