@@ -6,9 +6,12 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IContextLogoutResolver } from '../src/graphQLApi/schema/mutations/logout.mts'
 
 const del = vi.fn()
+const hGetAll = vi.fn()
+const hDel = vi.fn()
+const incr = vi.fn()
 const captureException = vi.fn()
 
-vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { del } }))
+vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { del, hGetAll, hDel, incr } }))
 vi.mock('@sentry/node', () => ({ captureException }))
 
 // Imported inside beforeAll, not at module top level: a module-level mutant (the
@@ -32,8 +35,18 @@ beforeAll(async () => {
  * The digests are written out as literals, computed elsewhere: a test that hashed the token with the call
  * the implementation makes would agree with it about any algorithm, including a mutated one.
  */
-const REFRESH_KEY = 'test:c81b450d77200783f68a3ff41d8ebcbafe2bb8f27bf0458cf5800040dff84cf5'
+const REFRESH_DIGEST = 'c81b450d77200783f68a3ff41d8ebcbafe2bb8f27bf0458cf5800040dff84cf5'
+const REFRESH_KEY = `test:${REFRESH_DIGEST}`
 const ACCESS_KEY = 'test:c12bbd0040e3933bb83bdb74cbf57db678068b4d380022f9d178022289b3406e'
+
+/*
+ * What a session hash holds that this service cares about, and the index row it produces (E15-S03). The
+ * account id and the tier come out of the hash rather than out of a constant here — this is the one
+ * service shared by all three tiers, so it has no tier of its own to assume.
+ */
+const ACCOUNT_ID = '68a1f0c2e4b0a91234567890'
+const SESSION_HASH = { _id: ACCOUNT_ID, tier: 'shopOwner' }
+const INDEX_KEY = `test:idx:shopOwner:${ACCOUNT_ID}`
 
 // minimal ctx: the resolver only uses state.user and cookies.set
 // `user` is optional here for the same reason it is optional on the resolver's own context type (E15-S09):
@@ -49,7 +62,13 @@ function makeCtx(user?: { refreshToken?: string; accessToken?: string }) {
 describe('mutations.logout', () => {
 	beforeEach(() => {
 		del.mockReset()
+		hDel.mockReset()
+		incr.mockReset()
 		captureException.mockReset()
+		// The session this logout is ending, under the hashed key shape. Every test needs one: the resolver
+		// reads the hash before it deletes anything, and a resolver told there is no session unfiles nothing.
+		hGetAll.mockReset()
+		hGetAll.mockResolvedValue(SESSION_HASH)
 	})
 
 	it('is of non-nullable Boolean type', () => {
@@ -85,6 +104,42 @@ describe('mutations.logout', () => {
 	})
 
 	/*
+	 * ⚠️ **The read comes first and the unfiling comes last, and neither position is free.** The hash is
+	 * deleted by the same resolver, so anything it has to say about the account has to be asked for before
+	 * that; and unfiling before the delete would leave a still-usable refresh token listed nowhere for the
+	 * width of the window between the two calls, which is precisely when a revocation would miss it.
+	 */
+	it('unfiles the session from its account index, once the keys it names are gone', async () => {
+		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))
+
+		expect(hGetAll).toHaveBeenCalledExactlyOnceWith(REFRESH_KEY)
+		expect(hDel.mock.calls).toEqual([[INDEX_KEY, REFRESH_DIGEST]])
+		expect(hGetAll.mock.invocationCallOrder[0]).toBeLessThan(Math.min(...del.mock.invocationCallOrder))
+		expect(hDel.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...del.mock.invocationCallOrder))
+	})
+
+	/*
+	 * A session minted before the index existed (E15-S02) carries no tier and no `_id`, and was never filed
+	 * under anything. The fields are checked rather than assumed because the alternative is not a harmless
+	 * miss: `undefined` reaches a template as the word `undefined`, so the unguarded call would delete a
+	 * field from `test:idx:undefined:undefined` — a key one future writer away from being real.
+	 */
+	it.each([
+		['no tier at all', { _id: ACCOUNT_ID }],
+		['a tier no collection mints', { _id: ACCOUNT_ID, tier: 'root' }],
+		['no account id', { tier: 'shopOwner' }],
+		['nothing at all — both key shapes missed', {}]
+	])('unfiles nothing when the session hash carries %s', async (_label, hash) => {
+		hGetAll.mockResolvedValue(hash)
+
+		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
+
+		// The keys still go: a session that is not in the index is still a session being ended.
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
+		expect(hDel).not.toHaveBeenCalled()
+	})
+
+	/*
 	 * The shape the old context type said could not exist (E15-S09). `x-introspectioncode` skips the whole
 	 * authentication block in `authorizationLogoutHandler`, so the resolver runs with `ctx.state` as Koa left
 	 * it — no `user`, no tokens, nothing to delete. The Sentry assertion is the load-bearing one: before this
@@ -97,6 +152,8 @@ describe('mutations.logout', () => {
 		await expect(logout.resolve(null, {}, ctx)).resolves.toBe(true)
 
 		expect(del).not.toHaveBeenCalled()
+		expect(hGetAll).not.toHaveBeenCalled()
+		expect(hDel).not.toHaveBeenCalled()
 		expect(ctx.cookies.set).not.toHaveBeenCalled()
 		expect(captureException).not.toHaveBeenCalled()
 	})
