@@ -1,6 +1,9 @@
-import type { IContextLogout } from '@axiumine/koa-utils/graphQL/schema/context/IContextLogout'
 import { GraphQLBoolean, GraphQLNonNull } from 'graphql'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Type-only, so it is erased before the module would be evaluated — the deferred `import()` below is what
+// keeps the module-level mutants attributable, and an erased import cannot undo that.
+import type { IContextLogoutResolver } from '../src/graphQLApi/schema/mutations/logout.mts'
 
 const del = vi.fn()
 const captureException = vi.fn()
@@ -33,11 +36,14 @@ const REFRESH_KEY = 'test:c81b450d77200783f68a3ff41d8ebcbafe2bb8f27bf0458cf58000
 const ACCESS_KEY = 'test:c12bbd0040e3933bb83bdb74cbf57db678068b4d380022f9d178022289b3406e'
 
 // minimal ctx: the resolver only uses state.user and cookies.set
-function makeCtx(user: { refreshToken?: string; accessToken?: string }) {
+// `user` is optional here for the same reason it is optional on the resolver's own context type (E15-S09):
+// the introspection bypass reaches the resolver without ever populating it, and a helper that could not
+// express that shape is a helper that could not test it.
+function makeCtx(user?: { refreshToken?: string; accessToken?: string }) {
 	return {
 		state: { user },
 		cookies: { set: vi.fn() }
-	} as unknown as IContextLogout & { cookies: { set: ReturnType<typeof vi.fn> } }
+	} as unknown as IContextLogoutResolver & { cookies: { set: ReturnType<typeof vi.fn> } }
 }
 
 describe('mutations.logout', () => {
@@ -76,6 +82,23 @@ describe('mutations.logout', () => {
 		// Both refresh shapes and neither access shape — the count alone would now pass on a resolver that
 		// deleted the access session under one shape and skipped the refresh one.
 		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
+	})
+
+	/*
+	 * The shape the old context type said could not exist (E15-S09). `x-introspectioncode` skips the whole
+	 * authentication block in `authorizationLogoutHandler`, so the resolver runs with `ctx.state` as Koa left
+	 * it — no `user`, no tokens, nothing to delete. The Sentry assertion is the load-bearing one: before this
+	 * story the same call dereferenced `undefined`, and the TypeError it threw was caught and reported as if
+	 * a session teardown had failed.
+	 */
+	it('deletes nothing and reports nothing when the context carries no session', async () => {
+		const ctx = makeCtx()
+
+		await expect(logout.resolve(null, {}, ctx)).resolves.toBe(true)
+
+		expect(del).not.toHaveBeenCalled()
+		expect(ctx.cookies.set).not.toHaveBeenCalled()
+		expect(captureException).not.toHaveBeenCalled()
 	})
 
 	it('swallows Redis errors, sends them to Sentry and still returns true', async () => {

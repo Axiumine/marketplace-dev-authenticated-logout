@@ -301,16 +301,18 @@ describe('logout service (integration, real Redis cluster)', () => {
 	})
 
 	/*
-	 * The introspection bypass and the resolver disagree, and this pins what really happens.
+	 * The introspection bypass and the resolver, now agreeing about what they are doing (E15-S09).
 	 *
-	 * With a valid x-introspectioncode and neither cookie nor Authorization header, the handler
-	 * takes its `introspection` exit and never assigns `ctx.state`. The resolver's first statement
-	 * then dereferences `ctx.state.user.refreshToken` on an undefined user — a TypeError, raised
-	 * inside its own try, swallowed by `catch { Sentry.captureException(e) }`, and reported to the
-	 * caller as a perfectly ordinary `true`.
+	 * With a valid x-introspectioncode and neither cookie nor Authorization header, the handler takes its
+	 * `introspection` exit and never assigns `ctx.state`. The resolver sees no session on its context and
+	 * returns `true` without touching Redis or the cookie — which is what this test asserts, and what it
+	 * asserted before the story too: the observable behaviour did not change.
 	 *
-	 * So logout answers success while deleting nothing. That is the only way to reach that catch
-	 * with real infrastructure: no Redis failure is needed, and none is simulated here.
+	 * What changed is how it was reached. The resolver's first statement used to dereference
+	 * `ctx.state.user.refreshToken` on an undefined user, and the `true` the caller received was a TypeError
+	 * raised inside the resolver's own try and swallowed by `catch { Sentry.captureException(e) }` — every
+	 * such call filed a Sentry event describing a session teardown that was never attempted. This is still
+	 * the only path that reaches this outcome with real infrastructure, and no Redis failure is simulated.
 	 */
 	it('answers true without deleting anything when the introspection code replaces the session', async () => {
 		const refresh = randomUUID()
