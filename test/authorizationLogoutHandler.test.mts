@@ -3,6 +3,8 @@ import Keygrip from 'keygrip'
 import type { Next } from 'koa'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ACCESS_SESSION, asHash, REFRESH_SESSION, refreshSessionWithoutIdentity } from './helpers/sessionFixtures.mts'
+
 const hGet = vi.fn()
 const incr = vi.fn()
 
@@ -25,6 +27,22 @@ const REFRESH_KEY = 'test:fd62e117b7af852f29f12e502a239d1b8f31afa959d463de0368d6
 const ACCESS_KEY = 'test:c12bbd0040e3933bb83bdb74cbf57db678068b4d380022f9d178022289b3406e'
 const REFRESH_RAW_KEY = `test:refresh:${REFRESH}`
 const ACCESS_RAW_KEY = 'test:access:xyz'
+
+/*
+ * Every other test in this file tells the mock what to answer; this one hands it what a session *is* — the
+ * hashes `sessionFixtures.mts` builds from `IRefreshData` and `IRedisDataUser` — and makes the handler find
+ * its identity inside them. See that file for why the distinction is the whole of E15-S01.
+ *
+ * Answers exactly as Redis would: an absent field is `null`, not `undefined`.
+ */
+const hGetFromWrittenSession = async (key: string, field: string) => {
+	const hashes: Record<string, Record<string, string>> = {
+		[REFRESH_KEY]: asHash(REFRESH_SESSION),
+		[ACCESS_KEY]: asHash(ACCESS_SESSION)
+	}
+
+	return hashes[key]?.[field] ?? null
+}
 
 // Cookie signed the way Koa emits it: value + `.sig` cookie holding the Keygrip signature.
 function signedCookie(token = REFRESH) {
@@ -135,7 +153,7 @@ describe('authorizationLogoutHandler', () => {
 		// One round trip each, to the hashed key, and the raw shape is never named: that is the steady state
 		// once the cutover has drained, and the counter stays untouched because nothing old was found.
 		expect(hGet.mock.calls).toEqual([
-			[REFRESH_KEY, 'id'],
+			[REFRESH_KEY, '_id'],
 			[ACCESS_KEY, '_id']
 		])
 		expect(incr).not.toHaveBeenCalled()
@@ -147,9 +165,8 @@ describe('authorizationLogoutHandler', () => {
 	 * answers `throwAlreadyDone` and leaves the credential alive — after telling the user they are out,
 	 * which is worse than not logging out at all.
 	 *
-	 * The field names travel to the raw read unchanged (`id` for the refresh hash, `_id` for the access
-	 * one): a fallback that asked for a different field would miss every old session and produce exactly
-	 * that failure.
+	 * The field name travels to the raw read unchanged — `_id` for both hashes: a fallback that asked for a
+	 * different field would miss every old session and produce exactly that failure.
 	 */
 	it('finds sessions written before the cutover under the raw key, and counts the hits', async () => {
 		hGet.mockImplementation(async (key: string) => (key === REFRESH_RAW_KEY || key === ACCESS_RAW_KEY ? 'session-id' : null))
@@ -158,8 +175,8 @@ describe('authorizationLogoutHandler', () => {
 		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
 
 		expect(hGet.mock.calls).toEqual([
-			[REFRESH_KEY, 'id'],
-			[REFRESH_RAW_KEY, 'id'],
+			[REFRESH_KEY, '_id'],
+			[REFRESH_RAW_KEY, '_id'],
 			[ACCESS_KEY, '_id'],
 			[ACCESS_RAW_KEY, '_id']
 		])
@@ -180,7 +197,56 @@ describe('authorizationLogoutHandler', () => {
 		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer ' })
 
 		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
-		expect(hGet.mock.calls).toEqual([[REFRESH_KEY, 'id']])
+		expect(hGet.mock.calls).toEqual([[REFRESH_KEY, '_id']])
+	})
+
+	/*
+	 * ⚠️ **The regression test for E15-S01, and the only one in this file the reader cannot satisfy by
+	 * agreeing with itself.** The mock answers out of `REFRESH_SESSION` and `ACCESS_SESSION` — the hashes
+	 * `IRefreshData` and `IRedisDataUser` describe, which is what the four writers actually put in Redis —
+	 * so the field this handler asks for has to be a field a login really writes. Ask for `id`, as this
+	 * service did until E15-S01, and both reads miss, `throwAlreadyDone` fires, and the assertions below
+	 * fail instead of passing against a hash shaped to order.
+	 *
+	 * Both key shapes are answered too, so the miss cannot be blamed on the cutover fallback: a wrong
+	 * field name misses under the digest and under the raw key alike.
+	 */
+	it('finds the session inside a hash written the way the login writers write it', async () => {
+		hGet.mockImplementation(hGetFromWrittenSession)
+		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+
+		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
+
+		// Reached on the hashed key both times, so the fallback never ran and nothing was counted as a
+		// pre-cutover hit — the session was found in the shape that is written today.
+		expect(hGet.mock.calls).toEqual([
+			[REFRESH_KEY, '_id'],
+			[ACCESS_KEY, '_id']
+		])
+		expect(incr).not.toHaveBeenCalled()
+		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
+	})
+
+	/*
+	 * The same hash, minus the one field the handler reads. `tier`, `familyId`, `originalLogin` and
+	 * `sessionCapDays` are all still there, so the key exists and `hGetAll` would return a session — and
+	 * the logout still refuses, because a hash without an identity is not one this service can revoke.
+	 * This is the failure the platform was living with: found for every other purpose, invisible to logout.
+	 */
+	it('refuses a refresh hash that carries every field except the identity', async () => {
+		const withoutIdentity = refreshSessionWithoutIdentity()
+
+		hGet.mockImplementation(async (key: string, field: string) =>
+			key === REFRESH_KEY ? (withoutIdentity[field] ?? null) : null
+		)
+		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+
+		// 204 with an empty message and description — `throwAlreadyDone`, the answer a second logout gets.
+		// Asserted rather than a bare `toThrow()`: every wrong path in this handler throws something.
+		await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toMatchObject({
+			extensions: { http: { status: 204 } }
+		})
+		expect(next).not.toHaveBeenCalled()
 	})
 
 	it('rejects if the refresh session no longer exists in Redis', async () => {

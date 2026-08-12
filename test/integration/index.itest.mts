@@ -14,6 +14,7 @@ dotenv.config()
 
 import { ENDPOINT, start } from '../../src/index.mts'
 import { ITEST_KEYGRIP_KEYS } from '../../vitest.keygrip.mts'
+import { ACCESS_SESSION, asHash, REFRESH_SESSION, refreshSessionWithoutIdentity } from '../helpers/sessionFixtures.mts'
 
 const REDIS_KEY = process.env.REDIS_KEY as string
 const INTROSPECTION_CODE = process.env.INTROSPECTION_CODE as string
@@ -82,6 +83,23 @@ afterAll(async () => {
 	await redisClient.close()
 })
 
+/*
+ * ⚠️ **The sessions are seeded whole, in the shape the writers write** (E15-S01) — see
+ * `test/helpers/sessionFixtures.mts` for why. Over a live cluster the argument is even simpler than it is
+ * in the unit suite: if the handler asks for a field no login writes, the lookup really misses, and the
+ * request really comes back 204 instead of 200.
+ */
+
+/** Writes the refresh hash a login writer produces, under whichever key shape the caller is testing. */
+function seedRefreshSession(key: string) {
+	return redisClient.hSet(key, asHash(REFRESH_SESSION))
+}
+
+/** Writes the access hash a login writer produces. */
+function seedAccessSession(key: string) {
+	return redisClient.hSet(key, asHash(ACCESS_SESSION))
+}
+
 /** POST `mutation { logout }` with whatever headers the caller wants to try. */
 function callLogout(headers: Record<string, string>) {
 	return fetch(`${base}${ENDPOINT}`, {
@@ -121,8 +139,8 @@ describe('logout service (integration, real Redis cluster)', () => {
 
 		// Seed the sessions the handler expects to find on the live cluster, TTLs included — that
 		// is how the authorization tier writes them, and an expiring key is what has to disappear.
-		await redisClient.hSet(refreshKey, 'id', 'itest')
-		await redisClient.hSet(accessKey, '_id', 'itest')
+		await seedRefreshSession(refreshKey)
+		await seedAccessSession(accessKey)
 		await redisClient.expire(refreshKey, 600)
 		await redisClient.expire(accessKey, 600)
 
@@ -153,7 +171,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	it('finds and revokes a session written before the cutover, under the raw key', async () => {
 		const refresh = randomUUID()
 		const rawKey = `${REDIS_KEY}refresh:${refresh}`
-		await redisClient.hSet(rawKey, 'id', 'itest')
+		await seedRefreshSession(rawKey)
 		await redisClient.expire(rawKey, 600)
 
 		const res = await callLogout({ cookie: signedCookie(refresh), authorization: `Bearer access:${randomUUID()}` })
@@ -170,7 +188,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	it('still clears the refresh session when the access token has already expired away', async () => {
 		const refresh = randomUUID()
 		const refreshKey = sessionKey(`refresh:${refresh}`)
-		await redisClient.hSet(refreshKey, 'id', 'itest')
+		await seedRefreshSession(refreshKey)
 
 		const res = await callLogout({
 			cookie: signedCookie(refresh),
@@ -193,16 +211,23 @@ describe('logout service (integration, real Redis cluster)', () => {
 		expect(res.status).toBe(204)
 	})
 
-	// The handler's success check is `hGet(..., 'id') != null` — not "the key exists". Seed a
-	// refresh hash on the real cluster under a different field name: `exists` would say 1, but the
-	// field lookup the handler actually runs still misses. Only a real hash can carry this
-	// distinction; a mock would have to be told to treat "exists" and "has this field" differently.
-	it('answers 204 when the refresh hash exists but lacks the field the handler reads', async () => {
+	/*
+	 * The handler's success check is `hGet(..., '_id') != null` — not "the key exists". Seed the real
+	 * session hash on the real cluster with its identity field removed: `exists` says 1, `hGetAll` returns
+	 * four populated fields, and the lookup the handler actually runs still misses. Only a real hash can
+	 * carry that distinction; a mock would have to be told to treat "exists" and "has this field"
+	 * differently.
+	 *
+	 * ⚠️ Seeded from `IRefreshData` minus `_id` rather than from an invented field name (E15-S01): a hash
+	 * whose only field is one no writer writes proves nothing about which field the reader should ask for,
+	 * and that is the assertion the previous version of this test was quietly making.
+	 */
+	it('answers 204 when the refresh hash exists but lacks the identity field the handler reads', async () => {
 		const refresh = randomUUID()
 		const refreshKey = sessionKey(`refresh:${refresh}`)
 		seededKeys.push(refreshKey)
 
-		await redisClient.hSet(refreshKey, 'notId', 'itest')
+		await redisClient.hSet(refreshKey, refreshSessionWithoutIdentity())
 
 		const res = await callLogout({
 			cookie: signedCookie(refresh),
@@ -227,7 +252,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	it('treats a bare `Bearer` as a real token, misses, and still logs out', async () => {
 		const refresh = randomUUID()
 		const refreshKey = sessionKey(`refresh:${refresh}`)
-		await redisClient.hSet(refreshKey, 'id', 'itest')
+		await seedRefreshSession(refreshKey)
 
 		const res = await callLogout({ cookie: signedCookie(refresh), authorization: 'Bearer ' })
 
@@ -245,7 +270,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	it('skips the access-token lookup outright when the Authorization header is present but empty', async () => {
 		const refresh = randomUUID()
 		const refreshKey = sessionKey(`refresh:${refresh}`)
-		await redisClient.hSet(refreshKey, 'id', 'itest')
+		await seedRefreshSession(refreshKey)
 
 		const res = await callLogout({ cookie: signedCookie(refresh), authorization: '' })
 
@@ -291,7 +316,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 		const refresh = randomUUID()
 		const refreshKey = sessionKey(`refresh:${refresh}`)
 		seededKeys.push(refreshKey)
-		await redisClient.hSet(refreshKey, 'id', 'itest')
+		await seedRefreshSession(refreshKey)
 
 		const res = await callLogout({ 'x-introspectioncode': INTROSPECTION_CODE })
 
@@ -347,8 +372,8 @@ describe('logout service (integration, real Redis cluster)', () => {
 		const accessKey = sessionKey(accessToken)
 		seededKeys.push(refreshKey, accessKey)
 
-		await redisClient.hSet(refreshKey, 'id', 'itest')
-		await redisClient.hSet(accessKey, '_id', 'itest')
+		await seedRefreshSession(refreshKey)
+		await seedAccessSession(accessKey)
 		await redisClient.expire(refreshKey, 600)
 		await redisClient.expire(accessKey, 600)
 

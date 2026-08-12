@@ -80,7 +80,16 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 		// Keyed by the digest of the token, with a raw-key fallback for sessions minted before the cutover
 		// (E13-S01/S02). This service is the one that must never miss: a logout that cannot find the session
 		// answers `throwAlreadyDone` and leaves a live credential behind after telling the user they are out.
-		const redRefreshSession = await readSessionField(redisClient, refreshToken, 'id')
+		//
+		// ⚠️ **`_id`, and the name is the whole story of E15-S01.** This read asked for `id` for as long as
+		// the service existed, and no writer has ever written that field: the refresh hash is `IRefreshData`,
+		// whose identity field is `_id` — written by the three login writers and by `refreshSessionTokens`.
+		// `hGet` therefore returned `null` for every real session, this handler took the branch below, and
+		// **every logout on the platform answered `throwAlreadyDone` while both tokens stayed live** until
+		// their natural expiry. The field name is asserted against a writer-shaped hash in
+		// `test/authorizationLogoutHandler.test.mts`, not against whatever this line happens to ask for —
+		// seeding the read's own field name is exactly how the defect survived its own test suite.
+		const redRefreshSession = await readSessionField(redisClient, refreshToken, '_id')
 		if (redRefreshSession != null) {
 			ctx.state = {
 				user: {

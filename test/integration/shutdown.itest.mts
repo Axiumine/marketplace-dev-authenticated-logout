@@ -16,6 +16,7 @@ import {
 } from '../../src/index.mts'
 import { disconnectAllDatabases } from '../../src/lib/db/disconnectAllDatabases.mts'
 import { ITEST_KEYGRIP_KEYS } from '../../vitest.keygrip.mts'
+import { asHash, REFRESH_SESSION } from '../helpers/sessionFixtures.mts'
 
 /*
  * The process-lifecycle half of the service, exercised against the real Redis cluster.
@@ -86,7 +87,9 @@ describe('production hardening actually applies to a real server', () => {
 
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {
-			await redisClient.hSet(refreshKey, 'id', 'itest')
+			// The whole hash a login writer produces, not one field of it (E15-S01) — see
+			// `test/helpers/sessionFixtures.mts`.
+			await redisClient.hSet(refreshKey, asHash(REFRESH_SESSION))
 
 			server = await createServer(ITEST_KEYGRIP_KEYS)
 			await new Promise<void>((resolve) => server!.httpServer.listen({ port: 0 }, () => resolve()))
