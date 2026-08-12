@@ -24,3 +24,11 @@ reports/
 .qodana/
 # GitNexus index storage. The committed part is .gitnexusrc at the repo root.
 .gitnexus/
+
+# Core dumps. Qodana's JS language service aborts on its 1 GB heap cap inside the scan container,
+# and while the host's core_pattern is relative the kernel drops a ~1.3 GB `core.<pid>` here in the
+# repo root — untracked, unignored, and large enough that `prettier --check .` fails on it with
+# "Invalid string length" and takes the whole commit gate down. qodana.sh sweeps them after every
+# scan; this is the second lock, so a crash costs a diagnosis rather than a red gate.
+core
+core.*

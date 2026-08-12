@@ -22,3 +22,8 @@ semgrep/vendor/
 # hand-wrapped paragraph in CLAUDE.md, COVERAGE.md and semgrep/README.md onto a single line. The
 # prose in this repo is wrapped deliberately and is meant to stay readable in a diff.
 *.md
+
+# Core dumps — see the matching .gitignore block. Prettier reads a file before deciding it cannot
+# format it, and a 1.3 GB one exceeds the maximum string length in V8.
+core
+core.*

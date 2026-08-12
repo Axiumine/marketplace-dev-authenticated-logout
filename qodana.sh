@@ -57,5 +57,37 @@ if [[ -n "$stale" ]]; then
 	docker rm -f $stale >/dev/null || true
 fi
 
+# Qodana's IntelliJ JS language service runs as `node --max_old_space_size=1024` inside the scan
+# container and aborts (SIGABRT) when it hits that hardcoded 1 GB cap. Where the kernel writes the
+# dump is decided by the *host's* /proc/sys/kernel/core_pattern: a bare relative pattern like "core"
+# (plus core_uses_pid=1 -> "core.<pid>") puts it in the crashing process's cwd, which is the
+# bind-mounted project root. On this workstation that reached 12 files and 15.2 GB in
+# marketplace-common before anyone noticed, and `prettier --check` then died on them with "Invalid
+# string length" — prettier reads a file before deciding it cannot format it.
+#
+# The host has since been given an absolute core_pattern, which is the real fix, but it is one
+# machine-wide setting that no repo controls: a reboot without a persisted sysctl, another
+# workstation, or CI brings the exposure straight back. `ulimit -c 0` here would not help either —
+# the container inherits RLIMIT_CORE from the docker *daemon*, not from this client shell. So sweep
+# after the scan, which is the part this repo does control.
+#
+# Only `core.<digits>` and a bare `core` that really is an ELF core dump are removed, so a future
+# source file or directory named `core` survives untouched.
+sweep_core_dumps() {
+	local f found=0 total=0
+	for f in core core.[0-9]*; do
+		[[ -f "$f" ]] || continue
+		[[ "$(LC_ALL=C od -An -tx1 -N4 "$f" 2>/dev/null | tr -d ' ')" == "7f454c46" ]] || continue
+		total=$((total + $(wc -c < "$f")))
+		rm -f "$f"
+		found=$((found + 1))
+	done
+	if ((found > 0)); then
+		echo "qodana.sh: removed $found core dump(s) ($((total / 1024 / 1024)) MB) left by a crashed process inside the scan container" >&2
+	fi
+}
+trap sweep_core_dumps EXIT
+
 # --run-promo true forces the promo (Ultimate) inspections on alongside the profile.
-exec qodana scan --run-promo true --coverage-dir coverage "$@"
+# Not `exec`: the EXIT trap above has to survive the scan, including a Ctrl-C or a crash.
+qodana scan --run-promo true --coverage-dir coverage "$@"
