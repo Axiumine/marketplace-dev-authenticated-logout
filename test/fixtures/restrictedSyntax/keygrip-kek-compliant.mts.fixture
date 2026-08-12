@@ -1,0 +1,8 @@
+// The shape the signing services really carry. The wrapping key is read from the environment on
+// purpose — only the keys it unwraps are banned — and KEYGRIP_KEY_BYTES is a live constant name in
+// marketplace-common, which a rule matching the bare prefix would have caught. Neither may be
+// reported: both selectors are anchored on `process.env`.
+const KEYGRIP_KEY_BYTES = 64
+
+export const kek = process.env.KEYGRIP_KEK
+export const size = process.env['KEYGRIP_KEK'] === undefined ? 0 : KEYGRIP_KEY_BYTES
