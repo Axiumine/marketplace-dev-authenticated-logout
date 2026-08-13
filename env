@@ -29,9 +29,12 @@ MAX_VIDEO_MB=100
 
 # No SOCKETLABS_* here: this service sends no mail, and E18-S10 took both the credential pair and the
 # @socketlabs/email dependency out. Only marketplace-dev-public-resource needs them.
-REDIRECT_DOMAIN=https://xxxx.tdweb.lan
-
-HIT_STATS=false
+#
+# ⚠️ REDIRECT_DOMAIN and HIT_STATS stood here and are gone, E18-S13: no `src/` file in any of the nine
+# services reads either, and no `dist/` file in either @axiumine package does. Neither was in
+# REQUIRED_ENV_VARS, so nothing failed when they were unset — every environment simply carried two
+# values that did nothing. Do not add them back: a template that lists names nothing reads teaches
+# operators to skim it, which is the one thing it cannot afford.
 # ⚠️ Development-only, and the gate is code rather than convention (E13-S11): the
 # `x-introspectioncode` header is honoured only when NODE_ENV is exactly `development` or `test`, and
 # refused under every other value — unset, empty, `staging`, `Production`, a typo. In production it
