@@ -27,8 +27,8 @@ UPLOAD_DIR=/media/xxx
 MAX_IMAGE_MB=20
 MAX_VIDEO_MB=100
 
-SOCKETLABS_SERVER_ID=111111
-SOCKETLABS_SERVER_APIKEY=xxxxxx
+# No SOCKETLABS_* here: this service sends no mail, and E18-S10 took both the credential pair and the
+# @socketlabs/email dependency out. Only marketplace-dev-public-resource needs them.
 REDIRECT_DOMAIN=https://xxxx.tdweb.lan
 
 HIT_STATS=false
