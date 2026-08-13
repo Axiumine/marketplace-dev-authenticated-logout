@@ -1392,14 +1392,6 @@
   resolved "http://yarnproxy.gio.lan:4873/@sindresorhus/merge-streams/-/merge-streams-4.0.0.tgz#abb11d99aeb6d27f1b563c38147a72d50058e339"
   integrity sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==
 
-"@socketlabs/email@^1.4.4":
-  version "1.4.4"
-  resolved "http://yarnproxy.gio.lan:4873/@socketlabs/email/-/email-1.4.4.tgz#ccc8467f4f1a4996e801da5a400b721a0f213eb0"
-  integrity sha512-Q8WvZJN6OY4BPnkmoHKrlUw1MQbbEWiblYyQccznuvxD+pK2p1rpV381ZmN8khfGq2Zn0SWt+5vm4wsWqW+KrA==
-  dependencies:
-    axios "^0.21.1"
-    promise-retry "^2.0.1"
-
 "@standard-schema/spec@^1.1.0":
   version "1.1.0"
   resolved "http://yarnproxy.gio.lan:4873/@standard-schema/spec/-/spec-1.1.0.tgz#a79b55dbaf8604812f52d140b2c9ab41bc150bb8"
@@ -2110,13 +2102,6 @@ available-typed-arrays@^1.0.7:
   dependencies:
     possible-typed-array-names "^1.0.0"
 
-axios@^0.21.1:
-  version "0.21.4"
-  resolved "http://yarnproxy.gio.lan:4873/axios/-/axios-0.21.4.tgz#c67b90dc0568e5c1cf2b0b858c43ba28e2eda575"
-  integrity sha512-ut5vewkiu8jjGBdqpM44XxjuCjq9LAKeHVmoVfHVzy8eHgxxq8SbAVQNovDA8mVi05kP0Ea/n/UzcSHcTJQfNg==
-  dependencies:
-    follow-redirects "^1.14.0"
-
 balanced-match@^1.0.0:
   version "1.0.2"
   resolved "http://yarnproxy.gio.lan:4873/balanced-match/-/balanced-match-1.0.2.tgz#e83e3a7e3f300b34cb9d87f615fa0cbf357690ee"
@@ -2483,11 +2468,6 @@ enhanced-resolve@^5.17.1:
   dependencies:
     graceful-fs "^4.2.4"
     tapable "^2.3.0"
-
-err-code@^2.0.2:
-  version "2.0.3"
-  resolved "http://yarnproxy.gio.lan:4873/err-code/-/err-code-2.0.3.tgz#23c2f3b756ffdfc608d30e27c9a941024807e7f9"
-  integrity sha512-2bmlRpNKBxT/CRmPOlyISQpNj+qSeYvcym/uT0Jx2bMOlKLtSy1ZmLuVxSEKKyor/N5yhvp/ZiG1oE3DEYMSFA==
 
 es-define-property@^1.0.0, es-define-property@^1.0.1:
   version "1.0.1"
@@ -2879,11 +2859,6 @@ flatted@^3.2.9:
   version "3.3.3"
   resolved "http://yarnproxy.gio.lan:4873/flatted/-/flatted-3.3.3.tgz#67c8fad95454a7c7abebf74bb78ee74a44023358"
   integrity sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==
-
-follow-redirects@^1.14.0:
-  version "1.15.11"
-  resolved "http://yarnproxy.gio.lan:4873/follow-redirects/-/follow-redirects-1.15.11.tgz#777d73d72a92f8ec4d2e410eb47352a56b8e8340"
-  integrity sha512-deG2P0JfjrTxl50XGCDyfI97ZGVCxIpfKYmfyrQ54n5FO/0gfIES8C/Psl6kWVDolizcaaxZJnTS0QSMxvnsBQ==
 
 for-each@^0.3.5:
   version "0.3.5"
@@ -3886,14 +3861,6 @@ progress@~2.0.3:
   resolved "http://yarnproxy.gio.lan:4873/progress/-/progress-2.0.3.tgz#7e8cf8d8f5b8f239c1bc68beb4eb78567d572ef8"
   integrity sha512-7PiHtLll5LdnKIMw100I+8xJXR5gW2QwWYkT6iJva0bXitZKa/XMrSbdmg3r2Xnaidz9Qumd0VPaMrZlF9V9sA==
 
-promise-retry@^2.0.1:
-  version "2.0.1"
-  resolved "http://yarnproxy.gio.lan:4873/promise-retry/-/promise-retry-2.0.1.tgz#ff747a13620ab57ba688f5fc67855410c370da22"
-  integrity sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g==
-  dependencies:
-    err-code "^2.0.2"
-    retry "^0.12.0"
-
 punycode@^2.1.0, punycode@^2.3.1:
   version "2.3.1"
   resolved "http://yarnproxy.gio.lan:4873/punycode/-/punycode-2.3.1.tgz#027422e2faec0b25e1549c3e1bd8309b9133b6e5"
@@ -3993,11 +3960,6 @@ retry@0.13.1:
   version "0.13.1"
   resolved "http://yarnproxy.gio.lan:4873/retry/-/retry-0.13.1.tgz#185b1587acf67919d63b357349e03537b2484658"
   integrity sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg==
-
-retry@^0.12.0:
-  version "0.12.0"
-  resolved "http://yarnproxy.gio.lan:4873/retry/-/retry-0.12.0.tgz#1b42a6266a21f07421d1b0b54b7dc167b01c013b"
-  integrity sha512-9LkiTwjUh6rT555DtE9rTX+BKByPfrMzEAtnlEtdEwr3Nkffwiihqe2bWADg+OQRjt9gl6ICdmB/ZFDCGAtSow==
 
 reusify@^1.0.4:
   version "1.1.0"
