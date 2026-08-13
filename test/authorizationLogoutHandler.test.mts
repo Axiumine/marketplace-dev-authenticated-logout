@@ -75,6 +75,8 @@ describe('authorizationLogoutHandler', () => {
 		next = vi.fn().mockResolvedValue('next') as unknown as Next
 	})
 
+	// AB-04: a request carrying no credential is refused
+	// AB-10: no x-introspectioncode at all leaves the ordinary refusal exactly as it is
 	it('rejects the request without a cookie', async () => {
 		const ctx = makeCtx({ authorization: 'Bearer access:xyz' })
 
@@ -100,6 +102,7 @@ describe('authorizationLogoutHandler', () => {
 		expect(next).not.toHaveBeenCalled()
 	})
 
+	// AB-05: a credential of the wrong shape is refused — a bad scheme, a broken signature
 	it('rejects a cookie with an invalid signature', async () => {
 		const ctx = makeCtx({
 			cookie: `refresh_token=${REFRESH}; refresh_token.sig=fake-signature`,
@@ -110,6 +113,7 @@ describe('authorizationLogoutHandler', () => {
 		expect(hGet).not.toHaveBeenCalled()
 	})
 
+	// AB-08: a valid x-introspectioncode is accepted with no credential at all, and reads no session
 	it('bypasses the checks with a valid x-introspectioncode and never touches Redis', async () => {
 		const ctx = makeCtx({ 'x-introspectioncode': 'test-introspection-code' })
 
@@ -118,6 +122,7 @@ describe('authorizationLogoutHandler', () => {
 		expect(next).toHaveBeenCalledTimes(1)
 	})
 
+	// AB-09: a wrong x-introspectioncode is refused
 	it('ignores a wrong x-introspectioncode', async () => {
 		const ctx = makeCtx({ 'x-introspectioncode': 'wrong-code' })
 
@@ -144,6 +149,7 @@ describe('authorizationLogoutHandler', () => {
 		expect(hGet).not.toHaveBeenCalled()
 	})
 
+	// AB-01: a valid credential is accepted and the session it resolves reaches ctx.state.user
 	it('fills state.user with both tokens when the sessions exist', async () => {
 		hGet.mockResolvedValueOnce('refresh-session-id').mockResolvedValueOnce('access-session-id')
 		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
@@ -249,6 +255,7 @@ describe('authorizationLogoutHandler', () => {
 		expect(next).not.toHaveBeenCalled()
 	})
 
+	// AB-06: a credential whose session is gone from Redis is refused
 	it('rejects if the refresh session no longer exists in Redis', async () => {
 		hGet.mockResolvedValueOnce(null)
 		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
@@ -270,6 +277,7 @@ describe('authorizationLogoutHandler', () => {
 		// Every value below is admitted by the `NODE_ENV !== 'production'` form this gate replaced, and
 		// each is a shape a real deploy produces: a container runtime that exports nothing, a shell that
 		// exports an empty string, a capital letter, a staging box nobody ever classified.
+		// AB-11: a valid x-introspectioncode is refused outside the environment allowlist, indistinguishably from none
 		it.each([['production'], ['staging'], ['Production'], [''], [undefined]])(
 			'refuses the cookie bypass under NODE_ENV=%o, with the missing-cookie error',
 			async (environment) => {
