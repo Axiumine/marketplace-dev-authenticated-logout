@@ -5,17 +5,20 @@ happens when you commit, push, or watch a gate fail. [`CLAUDE.md`](./CLAUDE.md) 
 
 ## Hooks
 
-`git push` runs `.githooks/pre-push`, a blocking **four**-step gate: `yarn lint:check` (eslint, then
+`git push` runs `.githooks/pre-push`, a blocking **five**-step gate: `yarn semgrep:ci` (Semgrep SAST over the
+sources, vendored rules, pinned image, `--network none`), then `yarn lint:check` (eslint, then
 `prettier --check`, both over the whole tree), then `yarn test:cov` (100% on every metric), then
 `yarn test:mutation` (Stryker, `thresholds.break: 100`), then Qodana (`./qodana.sh`, gated by
 `qodana.yaml`: coverage 100 total / 100 fresh, the SCA vulnerable-dependency check and the license
 audit). Keep the hook executable: git skips a non-executable hook with only a hint, so the gate
 disappears without ever failing.
 
-`git commit` runs `.githooks/pre-commit`, which is the secret guard *and* three of those four — lint,
-coverage, Qodana. Mutation is pre-push only.
+`git commit` runs `.githooks/pre-commit`, which is the secret guard *and* three of those five — lint,
+coverage, Qodana. Semgrep and mutation are pre-push only.
 
-Lint is first because it is the cheapest and because it is the only one of the four that can fail on a
+Semgrep is first because it is the cheapest of the five by an order of magnitude — about three seconds
+against the minutes the rest take together, so a rule violation is reported before anything slow runs.
+Lint leads the four that follow because it is the cheapest of them and the only one that can fail on a
 file the others are perfectly happy with — the next `yarn lint` would rewrite it anyway. It was
 ungated for a long time, and so were `eslint.config.js`, `.prettierrc` and `.prettierignore`: none of
 the three was in the hook's `RELEVANT_PATHS`, so a commit touching only them skipped every gate there

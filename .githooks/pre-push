@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Four gates, all blocking:
-#   1. lint     — eslint + prettier --check over the whole tree (yarn lint:check)
-#   2. coverage — 100% on every metric (yarn test:cov)
-#   3. mutation — 100% mutation score (yarn test:mutation)
-#   4. Qodana   — inspections, SAST, SCA, license audit, coverage (qodana.yaml)
+# Five gates, all blocking:
+#   1. semgrep  — SAST: vendored rules, pinned image, offline (yarn semgrep:ci)
+#   2. lint     — eslint + prettier --check over the whole tree (yarn lint:check)
+#   3. coverage — 100% on every metric (yarn test:cov)
+#   4. mutation — 100% mutation score (yarn test:mutation)
+#   5. Qodana   — inspections, SAST, SCA, license audit, coverage (qodana.yaml)
 #
 # Coverage proves the lines ran. Mutation proves the assertions actually catch a
 # change in them. Qodana proves nothing else regressed — and is the only gate
-# that ever sees the merge commit (see gate 4). Neither number may be lowered: if one goes red the fix is a test,
+# that ever sees the merge commit (see gate 5). Neither number may be lowered: if one goes red the fix is a test,
 # a deleted dead branch, or — for a provably equivalent mutant — a documented
 # `// Stryker disable next-line <Mutator>: <why>`. See COVERAGE.md.
 #
-# Ahead of all four: node. Every gate shells out to yarn, and `engines.node` is a
+# Ahead of all five: node. Every gate shells out to yarn, and `engines.node` is a
 # HARD gate under yarn classic — a mismatch exits 1 with `The engine "node" is
 # incompatible with this module`, not a warning. Without the switch below, a push
 # from a shell on the machine default node dies before the first gate, under
@@ -85,7 +86,7 @@ PUSH BLOCKED — wrong node.
 node $(node -v 2> /dev/null || echo '(not found)') does not satisfy engines.node ^$REQUIRED_NODE, and nvm could
 not be used to switch — either it is not installed at \${NVM_DIR:-\$HOME/.nvm}/nvm.sh
 or that version is not installed. yarn refuses to run at all in this state, so
-none of the four gates below could report anything.
+none of the five gates below could report anything.
 
 Fix it with:
 
@@ -118,7 +119,114 @@ MSG
 	exit 1
 fi
 
-echo "pre-push [1/4]: checking lint and formatting (yarn lint:check)…"
+# ---------------------------------------------------------------------------
+# Gate 1 — Semgrep (SAST). Coverage and mutation ask whether the code is tested;
+# this one asks whether it is safe. Deliberately push-only, like mutation: it
+# needs Docker and the pinned image, and a hook paid per commit is a hook that
+# gets bypassed out of habit. Push is the layer that matters anyway — it is the
+# only one that ever sees a merge commit.
+#
+# It runs FIRST because it is by far the cheapest of the five (~3 s against the
+# minutes the rest take together), so a rule violation is reported in seconds
+# rather than after a full coverage + mutation + Qodana run.
+#
+# `semgrep:ci` is the --error variant of `yarn semgrep`: exit 1 on any finding,
+# plus a SARIF at semgrep.sarif (gitignored). Every rule is vendored under
+# semgrep/ and the container runs --network none, so the verdict is offline and
+# reproducible — the pinned image tag is the only moving part.
+#
+# ⚠️ This is NOT the same scan as Qodana's SAST. Qodana runs JetBrains
+# inspections over the whole tree; this runs the semgrep registry packs plus
+# semgrep/custom.yml, whose rules are this platform's own — the three
+# secret-in-logs guards no general-purpose linter knows about.
+#
+# Bypass: `SKIP_SEMGREP=1 git push` — for a Docker outage, never for a finding.
+# ---------------------------------------------------------------------------
+
+if [ -n "${SKIP_SEMGREP:-}" ]; then
+	echo 'pre-push [1/5]: Semgrep gate skipped — SKIP_SEMGREP is set.' >&2
+else
+	# $1 = what is wrong, $2… = the command(s) that fix it. A missing prerequisite
+	# blocks; it never warns and continues. A gate that steps aside when it cannot
+	# run is not a gate, it is the hole this hook exists to close, one condition lower.
+	semgrep_block() {
+		local reason="$1"
+		shift
+		{
+			echo
+			echo '────────────────────────────────────────────────────────────────────────────'
+			echo "PUSH BLOCKED — $reason"
+			echo
+			echo 'Fix it with:'
+			echo
+			printf '    %s\n' "$@"
+			echo
+			echo 'Bypass once (every other gate still runs): SKIP_SEMGREP=1 git push'
+			echo '────────────────────────────────────────────────────────────────────────────'
+		} >&2
+		exit 1
+	}
+
+	# An absent ruleset is not an empty ruleset: `--config semgrep/` on a missing
+	# directory is an error, but a half-restored one would scan with whatever
+	# survived and report 0 findings, which reads exactly like a pass.
+	[ -d semgrep ] ||
+		semgrep_block 'semgrep/ is missing from the repo root — every rule this gate runs is vendored there.' \
+			'git checkout semgrep'
+
+	command -v docker > /dev/null 2>&1 ||
+		semgrep_block 'docker not found in PATH — the scan runs inside the pinned semgrep container.' \
+			'# install Docker Engine, then push again:' \
+			'https://docs.docker.com/engine/install/'
+
+	docker info > /dev/null 2>&1 ||
+		semgrep_block 'docker daemon not reachable.' \
+			'sudo systemctl start docker'
+
+	# Read the tag out of the yarn script rather than hard-coding it here, the same
+	# way the Qodana gate reads its linter out of qodana.yaml: bumping the engine in
+	# one place must not leave this hook checking for an image no scan uses.
+	SEMGREP_IMAGE="$(grep -oE 'semgrep/semgrep:[0-9][0-9.]*' package.json | head -n 1 || true)"
+
+	[ -n "$SEMGREP_IMAGE" ] ||
+		semgrep_block "no 'semgrep/semgrep:<version>' image found in the package.json scripts." \
+			'# restore the semgrep scripts, then push again:' \
+			'git checkout package.json'
+
+	# The container would be pulled on demand. Blocking instead keeps a slow or
+	# unreachable Docker Hub from turning into a failed push: one explicit pull per
+	# image bump, versus a network flake on any push.
+	docker image inspect "$SEMGREP_IMAGE" > /dev/null 2>&1 ||
+		semgrep_block "semgrep image $SEMGREP_IMAGE is not present locally." \
+			"docker pull $SEMGREP_IMAGE"
+
+	echo "pre-push [1/5]: running the SAST gate ($SEMGREP_IMAGE)…"
+
+	if ! yarn semgrep:ci; then
+		cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — Semgrep found something, or the scan could not run.
+
+Every finding is printed above and repeated in semgrep.sarif. Read the rule id
+first, then the code it matched:
+
+  1. A true positive is fixed in the source, never in the ruleset.
+  2. A genuine false positive gets an inline `// nosemgrep: <rule-id>` with the
+     reason written on the line above it. Never a bare `// nosemgrep`, which
+     silences every rule on that line, and never an edit to semgrep/vendor/ —
+     that is a frozen registry snapshot which vendor/refresh.sh will restore.
+
+Re-run `yarn semgrep` for the human-readable report, then push again.
+────────────────────────────────────────────────────────────────────────────
+MSG
+		exit 1
+	fi
+
+	echo 'pre-push [1/5]: Semgrep clean.'
+fi
+
+echo "pre-push [2/5]: checking lint and formatting (yarn lint:check)…"
 
 if ! yarn lint:check; then
 	cat >&2 <<'MSG'
@@ -140,7 +248,7 @@ MSG
 	exit 1
 fi
 
-echo "pre-push [2/4]: enforcing 100% test coverage (yarn test:cov)…"
+echo "pre-push [3/5]: enforcing 100% test coverage (yarn test:cov)…"
 
 if ! yarn test:cov; then
 	cat >&2 <<'MSG'
@@ -161,7 +269,7 @@ MSG
 	exit 1
 fi
 
-echo "pre-push [3/4]: enforcing 100% mutation score (yarn test:mutation)…"
+echo "pre-push [4/5]: enforcing 100% mutation score (yarn test:mutation)…"
 
 if ! yarn test:mutation; then
 	cat >&2 <<'MSG'
@@ -189,7 +297,7 @@ MSG
 fi
 
 # ---------------------------------------------------------------------------
-# Gate 4 — Qodana. It runs here as well as in pre-commit, for two reasons that
+# Gate 5 — Qodana. It runs here as well as in pre-commit, for two reasons that
 # pre-commit structurally cannot cover.
 #
 # 1. `git merge --no-ff` never fires pre-commit. Git runs that hook for
@@ -282,7 +390,7 @@ docker image inspect "$LINTER" > /dev/null 2>&1 ||
 		'# get a project token from https://qodana.cloud, then:' \
 		"echo 'QODANA_TOKEN=<token>' >> .env"
 
-echo "pre-push [4/4]: enforcing the Qodana gate ($LINTER)…"
+echo "pre-push [5/5]: enforcing the Qodana gate ($LINTER)…"
 
 if ! SKIP_TESTS=1 ./qodana.sh --results-dir .qodana/results; then
 	cat >&2 <<'MSG'
