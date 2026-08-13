@@ -182,6 +182,38 @@ describe('logout service (integration, real Redis cluster)', () => {
 		expect(await redisClient.exists(sessionKey(`refresh:${refresh}`))).toBe(0)
 	})
 
+	/*
+	 * ⚠️ **The residual E14-S06 left, against the live cluster.** The header names an access token that
+	 * is no longer there — an ordinary state, since a rotation kills the access token it replaces and the
+	 * tab sending this logout has not refreshed since another one did — so `authorizationLogoutHandler`
+	 * leaves `accessToken` unset and every name the resolver could once reach for is absent. The token
+	 * that *is* live is the one the last refresh minted, and until the session recorded its key nothing
+	 * here could name it: it survived the logout, in no family and in no index row, for up to ninety-one
+	 * minutes after the user was told they were out.
+	 *
+	 * Both keys are seeded whole and with TTLs, because a key holding an expiry is what has to disappear.
+	 */
+	it('retires the access session the refresh hash names, when the presented token is already gone', async () => {
+		const refresh = randomUUID()
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+		const boundAccessKey = sessionKey(`access:${randomUUID()}`)
+
+		await redisClient.hSet(refreshKey, { ...asHash(REFRESH_SESSION), accessKey: boundAccessKey })
+		await seedAccessSession(boundAccessKey)
+		await redisClient.expire(refreshKey, 600)
+		await redisClient.expire(boundAccessKey, 600)
+
+		const res = await callLogout({
+			cookie: signedCookie(refresh),
+			// Never written to Redis: the token this tab still holds was rotated away.
+			authorization: `Bearer access:${randomUUID()}`
+		})
+
+		await expectLoggedOut(res)
+		expect(await redisClient.exists(refreshKey)).toBe(0)
+		expect(await redisClient.exists(boundAccessKey)).toBe(0)
+	})
+
 	// The handler treats the access session as optional: an access token that already expired off
 	// the cluster is "no problem", and the refresh session still has to go. Only a real cluster can
 	// produce that state — a mock would have to be told to.
