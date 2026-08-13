@@ -48,6 +48,19 @@ const ACCOUNT_ID = '68a1f0c2e4b0a91234567890'
 const SESSION_HASH = { _id: ACCOUNT_ID, tier: 'shopOwner' }
 const INDEX_KEY = `test:idx:shopOwner:${ACCOUNT_ID}`
 
+/*
+ * The key of the access token minted beside this refresh token, as the login filed it (E14-S06).
+ *
+ * ⚠️ **A key, and one this file never derives.** It is stored whole — prefix and digest — so the resolver
+ * has nothing to hash and nothing to guess, and a literal unrelated to any token in this file is exactly
+ * the point: what is proved is that the resolver deletes *what the session says*, not what it can rebuild
+ * from a header it may never have been given.
+ *
+ * The default fixture above deliberately carries no such field. A session minted before it existed has
+ * none, and the resolver has to keep behaving as it did — which every other test in this file asserts.
+ */
+const BOUND_ACCESS_KEY = 'test:9f6d3a1c0b7e45d28c1a5f0e3b9d47a6c2e8f10b4d7a93c65e2f8a0b1d4c7e93'
+
 // minimal ctx: the resolver only uses state.user and cookies.set
 // `user` is optional here for the same reason it is optional on the resolver's own context type (E15-S09):
 // the introspection bypass reaches the resolver without ever populating it, and a helper that could not
@@ -100,6 +113,53 @@ describe('mutations.logout', () => {
 
 		// Both refresh shapes and neither access shape — the count alone would now pass on a resolver that
 		// deleted the access session under one shape and skipped the refresh one.
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
+	})
+
+	/*
+	 * ⚠️ **The whole of E14-S06's residual, at the logout end of it.** `authorizationLogoutHandler` leaves
+	 * `accessToken` unset whenever the presented token's session is already gone — the ordinary state of a
+	 * tab that has not refreshed since another one did, because a rotation kills the access token it
+	 * replaces. Every name this resolver could once reach for was then absent, and the *live* access token
+	 * — the one the last refresh minted — outlived the logout meant to end it: in no family, in no index
+	 * row, named by nothing anyone could ask for. The session records its key now, so it goes too.
+	 */
+	it('retires the access key the session records even when the call presented no live token', async () => {
+		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: BOUND_ACCESS_KEY })
+
+		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
+
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [BOUND_ACCESS_KEY]])
+	})
+
+	// A header naming a *different* access token than the session does — an older one, presented by a tab
+	// that has not refreshed since. Both are this session's, so both go: following only one leaves the
+	// other alive, and which one that is depends on which tab happened to send the logout.
+	it('retires both the bound access key and a presented token that names another', async () => {
+		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: BOUND_ACCESS_KEY })
+
+		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
+
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [ACCESS_KEY], ['test:access:xyz'], [BOUND_ACCESS_KEY]])
+	})
+
+	// The ordinary logout: the header names the very token the session recorded. One name, one delete —
+	// the `Set` is what keeps this path from paying a third round trip on every logout on the platform.
+	it('issues no extra delete when the bound key and the presented token name the same session', async () => {
+		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: ACCESS_KEY })
+
+		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
+
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [ACCESS_KEY], ['test:access:xyz']])
+	})
+
+	// An empty field would delete the bare prefix — the key nothing owns and everything on this platform
+	// is stored under a suffix of. Guarded for the same reason the empty access token above is.
+	it('deletes nothing extra when the session records an empty access key', async () => {
+		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: '' })
+
+		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))
+
 		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
 	})
 

@@ -23,13 +23,22 @@ import { TIER } from '@axiumine/marketplace-common/others/Tier'
  * collected as neither — one fixture, three suites, no drift.
  */
 
-/** The refresh-token session hash, exactly as a login writer or a rotation writes it. */
+/**
+ * The refresh-token session hash, exactly as a login writer or a rotation writes it.
+ *
+ * ⚠️ `accessKey` names the access half of the pair (E14-S06) and is written by every login and every
+ * rotation, so it belongs here — a fixture without it would seed a session shape the platform stopped
+ * producing. The value is a plausible key that names nothing on the cluster, which is the case a suite
+ * has to survive anyway: an access token expires long before its refresh token, so most of a session's
+ * life is spent with this field pointing at a key that is already gone.
+ */
 export const REFRESH_SESSION: IRefreshData = {
 	_id: '507f1f77bcf86cd799439011',
 	tier: TIER.user,
 	familyId: '3f2a1d9c-6b7e-4c1a-9f0d-2e5b8c4a7d13',
 	originalLogin: '1754784000000',
-	sessionCapDays: '30'
+	sessionCapDays: '30',
+	accessKey: `${process.env.REDIS_KEY}5e1c7a94b0d23f68ae5c1074b9d3f2a6c8e04b17d92a5f3c6e8b0147a2d9c5f3`
 }
 
 /** The access-token session hash for a customer, as `setRedisLoginSessionUser` writes it. */
@@ -52,8 +61,8 @@ export const asHash = (session: IRefreshData | IRedisDataUser): Record<string, s
 /**
  * The refresh hash with its identity field removed, and nothing else touched.
  *
- * The state that separates "this key exists" from "this session can be revoked": four populated fields,
- * `exists` answering 1, and the one lookup the logout handler makes still missing.
+ * The state that separates "this key exists" from "this session can be revoked": every field but the
+ * identity one populated, `exists` answering 1, and the one lookup the logout handler makes still missing.
  */
 export const refreshSessionWithoutIdentity = (): Record<string, string> => {
 	const hash = asHash(REFRESH_SESSION)

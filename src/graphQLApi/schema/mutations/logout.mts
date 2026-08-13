@@ -1,7 +1,13 @@
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import type { IContextLogout } from '@axiumine/koa-utils/graphQL/schema/context/IContextLogout'
 import { refreshTokenOptions } from '@axiumine/koa-utils/lib/tokenOptions'
-import { deleteSession, readSessionHash, unindexSession } from '@axiumine/marketplace-common/others/sessionKeys'
+import {
+	deleteSession,
+	legacySessionKey,
+	readSessionHash,
+	sessionKey,
+	unindexSession
+} from '@axiumine/marketplace-common/others/sessionKeys'
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import * as Sentry from '@sentry/node'
 import * as dotenv from 'dotenv'
@@ -68,13 +74,39 @@ export const logout = {
 			if (tier !== undefined && session._id !== undefined) {
 				await unindexSession(redisClient, user.refreshToken, { _id: session._id, tier })
 			}
-			// The access token is optional on the session this service writes: `authorizationLogoutHandler`
-			// sets it only when the header carried one *and* its session was still in Redis. Both halves are
-			// load-bearing — `undefined` reaches the key builder as the literal `'undefined'` and would delete
-			// `<prefix>undefined`, and the empty string would delete the bare prefix.
+			/*
+			 * The access half goes by **both** of the names anything here can know it by, deduped.
+			 *
+			 * The header's, when the call carried one: `authorizationLogoutHandler` sets `accessToken` only
+			 * when a header arrived *and* its session was still in Redis. Both halves of the guard are
+			 * load-bearing — `undefined` reaches the key builder as the literal `'undefined'` and would
+			 * delete `<prefix>undefined`, and the empty string would delete the bare prefix. Both key shapes
+			 * of it, as ever (E13-S02): the session may predate the cutover.
+			 *
+			 * ⚠️ **And the session's own, which is not always the same one.** `accessToken` is unset whenever
+			 * the presented token's session is no longer on the cluster — the ordinary state of a tab that
+			 * has not refreshed since another one did, since a rotation kills the access token it replaces.
+			 * The header then names a key that is already gone while the *live* access token, the one the
+			 * last refresh minted, is named by nothing this resolver could ask for: it is in no family, in
+			 * no index row, and it outlived the logout by up to ninety-one minutes. The user has been told
+			 * they are out, and that is not what being out means. This one is a *key* rather than a token,
+			 * so it is already built; it is absent on a session minted before the field existed, where
+			 * there is nothing to retire.
+			 *
+			 * One single-key `del` each, never a multi-key one: these digests land in different cluster
+			 * slots (BCON-08). The `Set` is what keeps the ordinary logout at two deletes instead of three.
+			 */
+			const accessKeysToRetire = new Set<string>()
+
 			if (user.accessToken !== undefined && user.accessToken !== '') {
-				await deleteSession(redisClient, user.accessToken)
+				accessKeysToRetire.add(sessionKey(user.accessToken))
+				accessKeysToRetire.add(legacySessionKey(user.accessToken))
 			}
+			if (session.accessKey !== undefined && session.accessKey !== '') {
+				accessKeysToRetire.add(session.accessKey)
+			}
+
+			await Promise.all([...accessKeysToRetire].map((key) => redisClient.del(key)))
 
 			// delete cookies
 			ctx.cookies.set('refresh_token', '', refreshTokenOptions)
