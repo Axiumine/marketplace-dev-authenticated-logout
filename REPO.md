@@ -5,19 +5,27 @@ happens when you commit, push, or watch a gate fail. [`CLAUDE.md`](./CLAUDE.md) 
 
 ## Hooks
 
-`git push` runs `.githooks/pre-push`, a blocking **five**-step gate: `yarn semgrep:ci` (Semgrep SAST over the
-sources, vendored rules, pinned image, `--network none`), then `yarn lint:check` (eslint, then
+`git push` runs `.githooks/pre-push`, a blocking **six**-step gate: `yarn semgrep:ci` (Semgrep SAST over the
+sources, vendored rules, pinned image, `--network none`), then trivy (dependency advisories, HIGH and
+CRITICAL, production tree only), then `yarn lint:check` (eslint, then
 `prettier --check`, both over the whole tree), then `yarn test:cov` (100% on every metric), then
 `yarn test:mutation` (Stryker, `thresholds.break: 100`), then Qodana (`./qodana.sh`, gated by
-`qodana.yaml`: coverage 100 total / 100 fresh, the SCA vulnerable-dependency check and the license
-audit). Keep the hook executable: git skips a non-executable hook with only a hint, so the gate
-disappears without ever failing.
+`qodana.yaml`: coverage 100 total / 100 fresh and the license audit). Keep the hook executable: git skips
+a non-executable hook with only a hint, so the gate disappears without ever failing.
 
-`git commit` runs `.githooks/pre-commit`, which is the secret guard *and* three of those five — lint,
-coverage, Qodana. Semgrep and mutation are pre-push only.
+⚠️ **Qodana is not what covers dependencies here, and the list above used to say it was.** The inspection
+it runs is `VulnerableLibrariesLocal`, an offline heuristic that queries no advisory feed and reports zero
+on every repo on this platform; the class that does query one ships in the same image and is in no
+profile. The trivy step is the check that reports — it reads `yarn.lock` natively, suppresses
+devDependencies, and blocks on HIGH or CRITICAL with the CVE id and the fixed version. Bypass for a Docker
+or network outage, never for a finding: `SKIP_TRIVY=1 git push`. E18-S11.
 
-Semgrep is first because it is the cheapest of the five by an order of magnitude — about three seconds
-against the minutes the rest take together, so a rule violation is reported before anything slow runs.
+`git commit` runs `.githooks/pre-commit`, which is the secret guard *and* three of those six — lint,
+coverage, Qodana. Semgrep, trivy and mutation are pre-push only.
+
+Semgrep and trivy lead because they are the two cheap ones — about three seconds and, with the
+vulnerability database already pulled, under one — against the minutes the rest take together, so a rule
+violation or an advisory is reported before anything slow runs.
 Lint leads the four that follow because it is the cheapest of them and the only one that can fail on a
 file the others are perfectly happy with — the next `yarn lint` would rewrite it anyway. It was
 ungated for a long time, and so were `eslint.config.js`, `.prettierrc` and `.prettierignore`: none of

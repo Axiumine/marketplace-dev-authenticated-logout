@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Five gates, all blocking:
+# Six gates, all blocking:
 #   1. semgrep  — SAST: vendored rules, pinned image, offline (yarn semgrep:ci)
-#   2. lint     — eslint + prettier --check over the whole tree (yarn lint:check)
-#   3. coverage — 100% on every metric (yarn test:cov)
-#   4. mutation — 100% mutation score (yarn test:mutation)
-#   5. Qodana   — inspections, SAST, SCA, license audit, coverage (qodana.yaml)
+#   2. trivy    — dependency advisories, HIGH+ , production tree only (E18-S11)
+#   3. lint     — eslint + prettier --check over the whole tree (yarn lint:check)
+#   4. coverage — 100% on every metric (yarn test:cov)
+#   5. mutation — 100% mutation score (yarn test:mutation)
+#   6. Qodana   — inspections, SAST, license audit, coverage (qodana.yaml)
 #
 # Coverage proves the lines ran. Mutation proves the assertions actually catch a
 # change in them. Qodana proves nothing else regressed — and is the only gate
-# that ever sees the merge commit (see gate 5). Neither number may be lowered: if one goes red the fix is a test,
+# that ever sees the merge commit (see gate 6). Neither number may be lowered: if one goes red the fix is a test,
 # a deleted dead branch, or — for a provably equivalent mutant — a documented
 # `// Stryker disable next-line <Mutator>: <why>`. See COVERAGE.md.
 #
@@ -144,7 +145,7 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ -n "${SKIP_SEMGREP:-}" ]; then
-	echo 'pre-push [1/5]: Semgrep gate skipped — SKIP_SEMGREP is set.' >&2
+	echo 'pre-push [1/6]: Semgrep gate skipped — SKIP_SEMGREP is set.' >&2
 else
 	# $1 = what is wrong, $2… = the command(s) that fix it. A missing prerequisite
 	# blocks; it never warns and continues. A gate that steps aside when it cannot
@@ -200,7 +201,7 @@ else
 		semgrep_block "semgrep image $SEMGREP_IMAGE is not present locally." \
 			"docker pull $SEMGREP_IMAGE"
 
-	echo "pre-push [1/5]: running the SAST gate ($SEMGREP_IMAGE)…"
+	echo "pre-push [1/6]: running the SAST gate ($SEMGREP_IMAGE)…"
 
 	if ! yarn semgrep:ci; then
 		cat >&2 <<'MSG'
@@ -223,10 +224,132 @@ MSG
 		exit 1
 	fi
 
-	echo 'pre-push [1/5]: Semgrep clean.'
+	echo 'pre-push [1/6]: Semgrep clean.'
 fi
 
-echo "pre-push [2/5]: checking lint and formatting (yarn lint:check)…"
+# ---------------------------------------------------------------------------
+# Gate 2 — Trivy (dependency advisories). Gate 1 asks whether the code this repo
+# wrote is safe; this one asks whether the code it installed is. Nothing else on
+# the platform answered that question. Qodana's `VulnerableLibrariesLocal` is
+# armed in every qodana.yaml, runs on every commit and push, and reports zero
+# problems everywhere — because it is a 0.03 s offline heuristic that queries no
+# advisory feed at all. `VulnerableLibrariesGlobalInspection`, the class in the
+# same image that does call vulnerability-search.jetbrains.com, appears in no
+# profile file and in no scan log this workspace has ever produced. A security
+# check that cannot report is indistinguishable from a passing one. E18-S11.
+#
+# Not `yarn audit`: yarn 1 aborts the entire run over the unpublished
+# @axiumine/marketplace-common, and `npm audit` needs a package-lock.json this
+# workspace does not have. Trivy reads yarn.lock natively.
+#
+# ⚠️ It suppresses devDependencies by default, and that is the property that makes
+# this gate keepable rather than the one everybody learns to bypass: an advisory
+# in something only `yarn build` ever loads does not block a push. HIGH and
+# CRITICAL only, matching qodana.yaml's own `critical: 0 / high: 0`.
+#
+# ⚠️ --skip-dirs .stryker-tmp is load-bearing. A crashed mutation run leaves a
+# sandbox behind holding a COPY of yarn.lock as it was that day, and trivy reports
+# it as a second target with the same weight as the real one. One such sandbox in
+# this workspace still carried axios@0.21.4 and picomatch@2.3.1 after both had
+# left the actual tree — a finding about a file nobody installs from.
+#
+# The vulnerability database is a 100 MB+ download shared through the named docker
+# volume below, so only the first run on a machine pays for it, and it updates
+# itself independently of the pinned image tag: a tree that is clean today can go
+# red tomorrow with no commit in between. That is the gate working, not flaking.
+#
+# Bypass: `SKIP_TRIVY=1 git push` — for a Docker or network outage, never for a
+# finding.
+# ---------------------------------------------------------------------------
+
+if [ -n "${SKIP_TRIVY:-}" ]; then
+	echo 'pre-push [2/6]: dependency-advisory gate skipped — SKIP_TRIVY is set.' >&2
+else
+	# Same contract as the SAST gate above: a missing prerequisite blocks, it never
+	# warns and continues. A gate that steps aside when it cannot run is not a gate.
+	trivy_block() {
+		local reason="$1"
+		shift
+		{
+			echo
+			echo '────────────────────────────────────────────────────────────────────────────'
+			echo "PUSH BLOCKED — $reason"
+			echo
+			echo 'Fix it with:'
+			echo
+			printf '    %s\n' "$@"
+			echo
+			echo 'Bypass once (every other gate still runs): SKIP_TRIVY=1 git push'
+			echo '────────────────────────────────────────────────────────────────────────────'
+		} >&2
+		exit 1
+	}
+
+	TRIVY_IMAGE='aquasec/trivy:0.70.0'
+
+	# An absent lockfile is not an empty one: trivy would find no language-specific
+	# file, report nothing and exit 0, which reads exactly like a clean tree.
+	[ -f yarn.lock ] ||
+		trivy_block 'yarn.lock is missing from the repo root — the scan would have nothing to read and would pass.' \
+			'git checkout yarn.lock'
+
+	command -v docker > /dev/null 2>&1 ||
+		trivy_block 'docker not found in PATH — the scan runs inside the pinned trivy container.' \
+			'# install Docker Engine, then push again:' \
+			'https://docs.docker.com/engine/install/'
+
+	docker info > /dev/null 2>&1 ||
+		trivy_block 'docker daemon not reachable.' \
+			'sudo systemctl start docker'
+
+	docker image inspect "$TRIVY_IMAGE" > /dev/null 2>&1 ||
+		trivy_block "trivy image $TRIVY_IMAGE is not present locally." \
+			"docker pull $TRIVY_IMAGE"
+
+	echo "pre-push [2/6]: checking dependency advisories ($TRIVY_IMAGE)…"
+
+	# --db-repository is not a preference: from here mirror.gcr.io answers 404 for
+	# the database layer and trivy treats that as fatal rather than falling back to
+	# its second source. The mount is read-only — the scan reads the tree and the
+	# cache volume, and writes nothing into the repo.
+	if ! docker run --rm \
+		-v "$PWD":/src:ro \
+		-v trivy-db-cache:/root/.cache/trivy \
+		"$TRIVY_IMAGE" fs \
+		--db-repository ghcr.io/aquasecurity/trivy-db:2 \
+		--scanners vuln \
+		--skip-dirs node_modules \
+		--skip-dirs .stryker-tmp \
+		--skip-dirs .qodana \
+		--severity HIGH,CRITICAL \
+		--exit-code 1 \
+		--skip-version-check \
+		/src; then
+		cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — a HIGH or CRITICAL advisory in the production tree, or the scan
+could not run. Both exit 1; the output above says which.
+
+Every finding is printed with its CVE id, the version installed and the version
+that fixes it. In order:
+
+  1. Upgrade the dependency. If it is transitive, `yarn why <name>` names the one
+     that pulls it in, and that is the one to move.
+  2. If the package is only ever loaded by the toolchain, it belongs in
+     devDependencies — moving it there is the fix, and the scan stops seeing it.
+  3. Only when there is no upgrade path: a `.trivyignore` entry, one line per CVE
+     id, with a comment naming the risk-register row that accepted it. Reviewed,
+     per finding, dated. Never a --severity edit, never a blanket ignore.
+────────────────────────────────────────────────────────────────────────────
+MSG
+		exit 1
+	fi
+
+	echo 'pre-push [2/6]: no HIGH or CRITICAL advisory in the production tree.'
+fi
+
+echo "pre-push [3/6]: checking lint and formatting (yarn lint:check)…"
 
 if ! yarn lint:check; then
 	cat >&2 <<'MSG'
@@ -248,7 +371,7 @@ MSG
 	exit 1
 fi
 
-echo "pre-push [3/5]: enforcing 100% test coverage (yarn test:cov)…"
+echo "pre-push [4/6]: enforcing 100% test coverage (yarn test:cov)…"
 
 if ! yarn test:cov; then
 	cat >&2 <<'MSG'
@@ -269,7 +392,7 @@ MSG
 	exit 1
 fi
 
-echo "pre-push [4/5]: enforcing 100% mutation score (yarn test:mutation)…"
+echo "pre-push [5/6]: enforcing 100% mutation score (yarn test:mutation)…"
 
 if ! yarn test:mutation; then
 	cat >&2 <<'MSG'
@@ -390,7 +513,7 @@ docker image inspect "$LINTER" > /dev/null 2>&1 ||
 		'# get a project token from https://qodana.cloud, then:' \
 		"echo 'QODANA_TOKEN=<token>' >> .env"
 
-echo "pre-push [5/5]: enforcing the Qodana gate ($LINTER)…"
+echo "pre-push [6/6]: enforcing the Qodana gate ($LINTER)…"
 
 if ! SKIP_TESTS=1 ./qodana.sh --results-dir .qodana/results; then
 	cat >&2 <<'MSG'
@@ -399,7 +522,9 @@ if ! SKIP_TESTS=1 ./qodana.sh --results-dir .qodana/results; then
 PUSH BLOCKED — Qodana failed.
 
 The gate lives in qodana.yaml: testCoverageThresholds 100 total / 100 fresh,
-plus the SCA vulnerable-dependency check and the third-party license audit.
+plus the third-party license audit. The vulnerable-dependency inspection it also
+runs is the offline heuristic E18-S11 measured at zero — the real check is the
+trivy gate above.
 Findings are listed above, with a report link on qodana.cloud.
 
 Local SARIF: .qodana/results/qodana.sarif.json
