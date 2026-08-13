@@ -318,8 +318,20 @@ if (process.env.NODE_ENV !== 'test') {
 				process.on('SIGINT', () => gracefulShutdown('SIGINT', srv.apolloServer, srv.httpServer))
 			}
 		})
-		.catch((e) => {
+		.catch((e: unknown) => {
+			/*
+			 * ⚠️ The exit code is the whole point, and it used to be **0**. `checkRequiredEnv()` throws
+			 * outside `start()`'s own try, so a missing variable lands here rather than in the
+			 * disconnect-and-exit inside it — and this handler ended with a Sentry call and nothing else.
+			 * Node then ran out of work and left with a success code: a service that never bound its port
+			 * reported a clean shutdown to Docker, to systemd and to any restart policy reading `$?`, so a
+			 * boot that failed was indistinguishable from one that was asked to stop. Sentry cannot stand in
+			 * for the code either — with no DSN configured the SDK discards the event, which is the state
+			 * this platform boots in. Say it where the container's own logs are, then leave with 1.
+			 */
+			console.error('fatal: the service could not start', e)
 			Sentry.captureException(e)
+			process.exit(1)
 		})
 }
 /* v8 ignore stop */
