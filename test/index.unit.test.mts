@@ -62,6 +62,33 @@ const {
 } = await import('../src/index.mts')
 
 describe('checkRequiredEnv', () => {
+	/*
+	 * ⚠️ The whole list, by value and in order, rather than a length or a `toContain`. This array is a
+	 * contract with every environment the service is deployed into, and both ways of breaking it are
+	 * silent: a name dropped from here turns a fatal misconfiguration into a service that starts and
+	 * fails later, at a request, somewhere that does not name the cause; a name added here and read
+	 * nowhere makes every environment carry a value that does nothing. A length check passes a swap and
+	 * a `toContain` passes an addition, so neither notices the change. The order is asserted too — the
+	 * boot names the *first* missing variable, and that is the one an operator goes looking for. E18-S03.
+	 */
+	it('requires exactly these 13 variables, in this order', () => {
+		expect(REQUIRED_ENV_VARS).toStrictEqual([
+			'PORT',
+			'KEYGRIP_KEK',
+			'REDIS_IS_CLUSTER',
+			'REDIS_DB1_HOST',
+			'REDIS_DB2_HOST',
+			'REDIS_DB3_HOST',
+			'REDIS_DB1_PORT',
+			'REDIS_DB2_PORT',
+			'REDIS_DB3_PORT',
+			'REDIS_USERNAME',
+			'REDIS_PASSWORD',
+			'REDIS_KEY',
+			'INTROSPECTION_CODE'
+		])
+	})
+
 	it('passes when every required variable is set', () => {
 		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
 		expect(() => checkRequiredEnv(env)).not.toThrow()
@@ -469,5 +496,29 @@ describe('the signing keys', () => {
 
 		await apolloServer.stop()
 		vi.unstubAllEnvs()
+	})
+})
+
+/*
+ * ⚠️ The boot itself, not just `checkRequiredEnv`. The check runs OUTSIDE `start()`'s try, so a missing
+ * variable has to travel out of `start()` to the caller instead of being swallowed into the
+ * disconnect-and-exit that handles a datasource failure — and it must get there before anything has
+ * connected, because a datasource handle left half-open by a boot nobody completed is a connection
+ * the pool goes on holding. E18-S03.
+ */
+describe('start (missing environment)', () => {
+	afterEach(() => {
+		vi.unstubAllEnvs()
+	})
+
+	it('rejects — with no datasource touched — when a required variable is missing', async () => {
+		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+		vi.stubEnv('REDIS_KEY', '')
+		RedisConnect.mockClear()
+		disconnectAllDatabases.mockClear()
+
+		await expect(start()).rejects.toThrow('Missing required environment variable: REDIS_KEY')
+		expect(RedisConnect).not.toHaveBeenCalled()
+		expect(disconnectAllDatabases).not.toHaveBeenCalled()
 	})
 })
