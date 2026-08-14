@@ -74,6 +74,29 @@ describe('authorizationLogoutHandler', () => {
 		next = vi.fn().mockResolvedValue('next') as unknown as Next
 	})
 
+	/*
+	 * The resolution two tests below end with, written once. Both send the same request — a signed cookie
+	 * and a Bearer — and both expect the same four things of a handler that found the session: it passes the
+	 * request on, it reached Redis once per session and on the hashed key both times, the raw shape is never
+	 * named, and both tokens land on `ctx.state.user`.
+	 *
+	 * What differs between the two callers is only what `hGet` was told to answer before this runs, and that
+	 * stays at the call site: one hands it two ids, the other hands it the hashes a real login writes. Every
+	 * assertion is still made in both cases — the helper is called, not shared setup, so a caller that
+	 * skipped it would visibly assert nothing.
+	 */
+	const expectBothSessionsResolved = async () => {
+		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+
+		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
+
+		expect(hGet.mock.calls).toEqual([
+			[REFRESH_KEY, '_id'],
+			[ACCESS_KEY, '_id']
+		])
+		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
+	}
+
 	// AB-04: a request carrying no credential is refused
 	// AB-10: no x-introspectioncode at all leaves the ordinary refusal exactly as it is
 	it('rejects the request without a cookie', async () => {
@@ -151,17 +174,8 @@ describe('authorizationLogoutHandler', () => {
 	// AB-01: a valid credential is accepted and the session it resolves reaches ctx.state.user
 	it('fills state.user with both tokens when the sessions exist', async () => {
 		hGet.mockResolvedValueOnce('refresh-session-id').mockResolvedValueOnce('access-session-id')
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
-
-		// One round trip each, to the hashed key, and the raw shape is never named — the only state there is
-		// since E13-S10.
-		expect(hGet.mock.calls).toEqual([
-			[REFRESH_KEY, '_id'],
-			[ACCESS_KEY, '_id']
-		])
-		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
+		await expectBothSessionsResolved()
 	})
 
 	/*
@@ -211,16 +225,8 @@ describe('authorizationLogoutHandler', () => {
 	 */
 	it('finds the session inside a hash written the way the login writers write it', async () => {
 		hGet.mockImplementation(hGetFromWrittenSession)
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
-
-		// Reached on the hashed key both times — the only shape there is.
-		expect(hGet.mock.calls).toEqual([
-			[REFRESH_KEY, '_id'],
-			[ACCESS_KEY, '_id']
-		])
-		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
+		await expectBothSessionsResolved()
 	})
 
 	/*
