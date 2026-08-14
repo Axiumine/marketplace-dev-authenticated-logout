@@ -119,7 +119,7 @@ function callHelloLogout(headers: Record<string, string>) {
 }
 
 /**
- * The success half of a logout assertion: 200, no GraphQL errors, `logout: true`. Four tests make
+ * The success half of a logout assertion: 200, no GraphQL errors, `logout: true`. Five tests make
  * those same three claims and differ only in what they check afterwards, so the shared part lives
  * here. Reads the body, which a `Response` allows once — the caller can still read the headers.
  */
@@ -160,25 +160,34 @@ describe('logout service (integration, real Redis cluster)', () => {
 	})
 
 	/*
-	 * ⚠️ E13-S02, against the real cluster: a session seeded in the **pre-cutover shape** — the token as
-	 * the key name — is still found and still revoked. This is the case the dual-read exists for, and it
-	 * is the one nothing else can prove: on the deploy that turns hashing on, every session in Redis looks
-	 * exactly like the one seeded here.
+	 * ⚠️ **The inverted E13-S02 test** (E13-S10), against the real cluster. The seed is byte-for-byte the
+	 * one that used to prove the dual-read worked — a whole refresh session under the **pre-cutover shape**,
+	 * the token as the key name — and the expected answer is now its opposite: 204, the session is not
+	 * found, and the key is still sitting there untouched afterwards.
 	 *
-	 * ⚠️ **When E13-S10 deletes the fallback, this test goes with it**, and the shape it seeds becomes
-	 * unreadable by design. It is not a regression test for a behaviour that stays.
+	 * Inverted rather than deleted, because the seed is the only fixture that can tell "the fallback is
+	 * gone" from "the fallback is spelled differently". A source grep proves the constant left; only a live
+	 * cluster holding a key of that exact shape proves nothing reads it. Every other 204 test here seeds
+	 * nothing at all and would pass against a service that still had the fallback.
+	 *
+	 * The key is registered for the drain: the resolver never reaches it, so nothing deletes it but
+	 * `afterAll`. That registration is itself part of the assertion — a logout that still found the raw
+	 * shape would leave `exists` at 0 and fail two lines below.
 	 */
-	it('finds and revokes a session written before the cutover, under the raw key', async () => {
+	it('refuses a session written before the cutover under the raw key, and leaves it alone', async () => {
 		const refresh = randomUUID()
 		const rawKey = `${REDIS_KEY}refresh:${refresh}`
+		seededKeys.push(rawKey)
 		await seedRefreshSession(rawKey)
 		await redisClient.expire(rawKey, 600)
 
 		const res = await callLogout({ cookie: signedCookie(refresh), authorization: `Bearer access:${randomUUID()}` })
 
-		await expectLoggedOut(res)
-		expect(await redisClient.exists(rawKey)).toBe(0)
-		// The hashed twin was never written, and the logout must not have invented it.
+		// throwAlreadyDone: the digest of this token names nothing, and that is the only name looked up.
+		expect(res.status).toBe(204)
+		// Untouched — not read, not revoked. A pre-cutover session is now unreachable, by design.
+		expect(await redisClient.exists(rawKey)).toBe(1)
+		// And the logout invented no hashed twin on its way to the refusal.
 		expect(await redisClient.exists(sessionKey(`refresh:${refresh}`))).toBe(0)
 	})
 
