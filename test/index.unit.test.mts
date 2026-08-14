@@ -243,18 +243,31 @@ describe('process handlers', () => {
 	})
 })
 
+/*
+ * The boot fixture both `start` suites open with: every mock the entry point reaches, reset to the answer
+ * a healthy boot gives, and the env it refuses to start without. Each suite then adds the spies that are
+ * actually its own — `console.error` below, `console.info` and a short-circuited `listen` above — which is
+ * the only part that ever differed between the two.
+ *
+ * Shared as a call, not as a nested `beforeEach`: the two suites are siblings, so a shared hook would have
+ * to sit at file level and would then also run for the suites above that mock none of this.
+ */
+const resetStartMocks = () => {
+	captureException.mockReset()
+	disconnectAllDatabases.mockReset()
+	RedisConnect.mockReset()
+	loadKeygrip.mockReset().mockResolvedValue({ version: 1, fp: 'c77808de4139', keys: KEYS })
+	watchKeygrip.mockReset().mockResolvedValue(undefined)
+	subscriber.connect.mockReset().mockResolvedValue(undefined)
+	redisClient.duplicate.mockClear()
+	for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+}
+
 describe('start (failure path)', () => {
 	let errorLog: ReturnType<typeof vi.spyOn>
 
 	beforeEach(() => {
-		captureException.mockReset()
-		disconnectAllDatabases.mockReset()
-		RedisConnect.mockReset()
-		loadKeygrip.mockReset().mockResolvedValue({ version: 1, fp: 'c77808de4139', keys: KEYS })
-		watchKeygrip.mockReset().mockResolvedValue(undefined)
-		subscriber.connect.mockReset().mockResolvedValue(undefined)
-		redisClient.duplicate.mockClear()
-		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+		resetStartMocks()
 		errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 	})
 	afterEach(() => {
@@ -319,14 +332,7 @@ describe('start (success path)', () => {
 	let info: ReturnType<typeof vi.spyOn>
 
 	beforeEach(() => {
-		captureException.mockReset()
-		disconnectAllDatabases.mockReset()
-		RedisConnect.mockReset()
-		loadKeygrip.mockReset().mockResolvedValue({ version: 1, fp: 'c77808de4139', keys: KEYS })
-		watchKeygrip.mockReset().mockResolvedValue(undefined)
-		subscriber.connect.mockReset().mockResolvedValue(undefined)
-		redisClient.duplicate.mockClear()
-		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+		resetStartMocks()
 		info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
 		listen = vi
 			.spyOn(http.Server.prototype, 'listen')
