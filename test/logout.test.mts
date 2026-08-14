@@ -27,10 +27,9 @@ beforeAll(async () => {
 })
 
 /*
- * The two shapes every session key now has (E13-S01/S02): the digest of the prefixed token, which is what
- * writes use, and the token itself, which is what everything wrote before the cutover. Both are deleted on
- * every logout — the session being revoked may predate the cutover, and dropping only one shape would leave
- * a usable credential behind after the user has been told they are out.
+ * The one shape a session key has (E13-S01), and the only one deleted since E13-S10: the digest of the
+ * prefixed token. The second delete this resolver used to issue — the token itself, the pre-cutover shape —
+ * went with the fallback that could read it, so every assertion below is a single key per half.
  *
  * The digests are written out as literals, computed elsewhere: a test that hashed the token with the call
  * the implementation makes would agree with it about any algorithm, including a mutated one.
@@ -98,14 +97,14 @@ describe('mutations.logout', () => {
 
 		await expect(logout.resolve(null, {}, ctx)).resolves.toBe(true)
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
 		expect(ctx.cookies.set).toHaveBeenCalledWith('refresh_token', '', expect.any(Object))
 	})
 
 	it('also deletes the access session when present', async () => {
 		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [ACCESS_KEY], ['test:access:xyz']])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY]])
 	})
 
 	it('does not delete the access session if the token is an empty string', async () => {
@@ -113,7 +112,7 @@ describe('mutations.logout', () => {
 
 		// Both refresh shapes and neither access shape — the count alone would now pass on a resolver that
 		// deleted the access session under one shape and skipped the refresh one.
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
 	})
 
 	/*
@@ -129,7 +128,7 @@ describe('mutations.logout', () => {
 
 		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [BOUND_ACCESS_KEY]])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], [BOUND_ACCESS_KEY]])
 	})
 
 	// A header naming a *different* access token than the session does — an older one, presented by a tab
@@ -140,7 +139,7 @@ describe('mutations.logout', () => {
 
 		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [ACCESS_KEY], ['test:access:xyz'], [BOUND_ACCESS_KEY]])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY], [BOUND_ACCESS_KEY]])
 	})
 
 	// The ordinary logout: the header names the very token the session recorded. One name, one delete —
@@ -150,7 +149,7 @@ describe('mutations.logout', () => {
 
 		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc'], [ACCESS_KEY], ['test:access:xyz']])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY]])
 	})
 
 	// An empty field would delete the bare prefix — the key nothing owns and everything on this platform
@@ -160,7 +159,7 @@ describe('mutations.logout', () => {
 
 		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
 	})
 
 	/*
@@ -188,14 +187,14 @@ describe('mutations.logout', () => {
 		['no tier at all', { _id: ACCOUNT_ID }],
 		['a tier no collection mints', { _id: ACCOUNT_ID, tier: 'root' }],
 		['no account id', { tier: 'shopOwner' }],
-		['nothing at all — both key shapes missed', {}]
+		['nothing at all — the key missed', {}]
 	])('unfiles nothing when the session hash carries %s', async (_label, hash) => {
 		hGetAll.mockResolvedValue(hash)
 
 		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
 
 		// The keys still go: a session that is not in the index is still a session being ended.
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], ['test:refresh:abc']])
+		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
 		expect(hDel).not.toHaveBeenCalled()
 	})
 

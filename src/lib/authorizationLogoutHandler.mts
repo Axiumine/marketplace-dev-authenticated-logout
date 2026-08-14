@@ -77,9 +77,9 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 
 	if (!introspection) {
 		const refreshToken = verifySignedRefreshToken(ctx as unknown as IContextRefresh, keys)
-		// Keyed by the digest of the token, with a raw-key fallback for sessions minted before the cutover
-		// (E13-S01/S02). This service is the one that must never miss: a logout that cannot find the session
-		// answers `throwAlreadyDone` and leaves a live credential behind after telling the user they are out.
+		// Keyed by the digest of the token, and by nothing else since E13-S10 removed the raw-key fallback.
+		// This service is the one that must never miss: a logout that cannot find the session answers
+		// `throwAlreadyDone` and leaves a live credential behind after telling the user they are out.
 		//
 		// ⚠️ **`_id`, and the name is the whole story of E15-S01.** This read asked for `id` for as long as
 		// the service existed, and no writer has ever written that field: the refresh hash is `IRefreshData`,

@@ -6,9 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACCESS_SESSION, asHash, REFRESH_SESSION, refreshSessionWithoutIdentity } from './helpers/sessionFixtures.mts'
 
 const hGet = vi.fn()
-const incr = vi.fn()
 
-vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hGet, incr } }))
+vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ redisClient: { hGet } }))
 
 const { authorizationLogoutHandler } = await import('../src/lib/authorizationLogoutHandler.mts')
 
@@ -20,8 +19,9 @@ const REFRESH = '27119032-9043-4a9f-bd4c-9d06fd576290'
  * digests are written out as literals, computed elsewhere — a test that hashed the token with the call the
  * implementation makes would agree with it about any algorithm, including a mutated one.
  *
- * The raw keys below are the shape everything wrote before the cutover, kept alive by the fallback read
- * (E13-S02) so the deploy that turns hashing on does not log every user out at the same second.
+ * The raw keys below are the shape everything wrote before the E13-S01 cutover. Nothing builds them any
+ * more — E13-S10 deleted the fallback that read them — and they are kept here as the negative fixture the
+ * inverted test seeds: a key that must now resolve to nothing.
  */
 const REFRESH_KEY = 'test:fd62e117b7af852f29f12e502a239d1b8f31afa959d463de0368d684452cefa5'
 const ACCESS_KEY = 'test:c12bbd0040e3933bb83bdb74cbf57db678068b4d380022f9d178022289b3406e'
@@ -71,7 +71,6 @@ describe('authorizationLogoutHandler', () => {
 
 	beforeEach(() => {
 		hGet.mockReset()
-		incr.mockReset()
 		next = vi.fn().mockResolvedValue('next') as unknown as Next
 	})
 
@@ -156,38 +155,33 @@ describe('authorizationLogoutHandler', () => {
 
 		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
 
-		// One round trip each, to the hashed key, and the raw shape is never named: that is the steady state
-		// once the cutover has drained, and the counter stays untouched because nothing old was found.
+		// One round trip each, to the hashed key, and the raw shape is never named — the only state there is
+		// since E13-S10.
 		expect(hGet.mock.calls).toEqual([
 			[REFRESH_KEY, '_id'],
 			[ACCESS_KEY, '_id']
 		])
-		expect(incr).not.toHaveBeenCalled()
 		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
 	})
 
 	/*
-	 * ⚠️ The cutover, at the service that must never miss. A logout that cannot find a pre-cutover session
-	 * answers `throwAlreadyDone` and leaves the credential alive — after telling the user they are out,
-	 * which is worse than not logging out at all.
+	 * ⚠️ **The inverted E13-S02 test** (E13-S10). The fixture is unchanged — both halves of a session
+	 * sitting under the pre-cutover raw keys, and nothing under either digest — and the answer flips: the
+	 * handler finds no refresh session, so the logout is `throwAlreadyDone` rather than a revocation.
 	 *
-	 * The field name travels to the raw read unchanged — `_id` for both hashes: a fallback that asked for a
-	 * different field would miss every old session and produce exactly that failure.
+	 * This service is the one that used to have the strongest case for the fallback, since a logout that
+	 * misses leaves a live credential behind after telling the user they are out. What removes the case is
+	 * that no session of this shape can exist: the cutover was never deployed, and every writer has hashed
+	 * since E13-S01. Both raw keys are still seeded here so that a reintroduced fallback fails loudly.
 	 */
-	it('finds sessions written before the cutover under the raw key, and counts the hits', async () => {
+	it('refuses a session written under the raw keys, and reads neither of them', async () => {
 		hGet.mockImplementation(async (key: string) => (key === REFRESH_RAW_KEY || key === ACCESS_RAW_KEY ? 'session-id' : null))
 		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
+		await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
 
-		expect(hGet.mock.calls).toEqual([
-			[REFRESH_KEY, '_id'],
-			[REFRESH_RAW_KEY, '_id'],
-			[ACCESS_KEY, '_id'],
-			[ACCESS_RAW_KEY, '_id']
-		])
-		expect(incr.mock.calls).toEqual([['test:dual-read-hits'], ['test:dual-read-hits']])
-		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
+		expect(hGet.mock.calls).toEqual([[REFRESH_KEY, '_id']])
+		expect(next).not.toHaveBeenCalled()
 	})
 
 	it('proceeds without accessToken if the access session has already expired', async () => {
@@ -214,8 +208,6 @@ describe('authorizationLogoutHandler', () => {
 	 * service did until E15-S01, and both reads miss, `throwAlreadyDone` fires, and the assertions below
 	 * fail instead of passing against a hash shaped to order.
 	 *
-	 * Both key shapes are answered too, so the miss cannot be blamed on the cutover fallback: a wrong
-	 * field name misses under the digest and under the raw key alike.
 	 */
 	it('finds the session inside a hash written the way the login writers write it', async () => {
 		hGet.mockImplementation(hGetFromWrittenSession)
@@ -223,13 +215,11 @@ describe('authorizationLogoutHandler', () => {
 
 		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
 
-		// Reached on the hashed key both times, so the fallback never ran and nothing was counted as a
-		// pre-cutover hit — the session was found in the shape that is written today.
+		// Reached on the hashed key both times — the only shape there is.
 		expect(hGet.mock.calls).toEqual([
 			[REFRESH_KEY, '_id'],
 			[ACCESS_KEY, '_id']
 		])
-		expect(incr).not.toHaveBeenCalled()
 		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
 	})
 
