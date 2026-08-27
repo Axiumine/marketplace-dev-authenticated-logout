@@ -145,6 +145,79 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Backstop for the yarn.lock clean filter (scripts/lockfile-registry-filter.sh).
+# That filter is opt-in and does not exist unless this clone recorded a mirror,
+# so on most machines there is nothing at all between a mirrored lockfile and the
+# index except this check. Where it is configured it strips the mirror host on
+# the way in; where it is not — or where it was handed a different host from the
+# one that resolved the lockfile — the committed lockfile carries a registry that
+# resolves on one network only and breaks `yarn install` for every other clone.
+# The published tarball is unaffected — `files: ["dist"]` keeps yarn.lock out of
+# it — so clones are the only casualty, and they fail at install with no hint of
+# why.
+#
+# Inspect the index (`:yarn.lock`), not the working tree — a clone that opted in
+# keeps mirror URLs there by design. Checked unconditionally rather than only
+# when yarn.lock is staged: a tainted blob that happens to match HEAD produces
+# no staged diff, so a $STAGED-gated check would wave through exactly the state
+# it exists to catch. Absent from the index, `git show` fails and LOCK_INDEX is
+# empty.
+#
+# Read into a variable instead of piping `git show` into `grep -q`: -q exits on
+# the first match, `git show` then dies of SIGPIPE, and `set -o pipefail` turns
+# that into a falsy pipeline — the check would silently never fire.
+# ---------------------------------------------------------------------------
+LOCK_INDEX="$(git show :yarn.lock 2> /dev/null || true)"
+
+# Match on "not the public registry" rather than one hard-coded mirror host, so
+# any mirror, VPN-only cache or rewritten uplink is caught too.
+#
+# Two hosts pass, not one: registry.npmjs.org is what this lockfile is committed
+# with and what the clean filter rewrites to, but yarn 1's own default is
+# registry.yarnpkg.com — npm's CDN alias. Re-resolving the lockfile with stock
+# yarn config writes that host into all 510 lines, and blocking it would reject a
+# contributor who never touched a mirror at all. Both resolve for everyone, which
+# is the only thing this check is defending.
+FOREIGN_HOSTS="$(
+	printf '%s\n' "$LOCK_INDEX" \
+		| grep -oE '^[[:space:]]*resolved "https?://[^/"]+' \
+		| grep -oE 'https?://[^/"]+' \
+		| grep -vxF -e 'https://registry.npmjs.org' -e 'https://registry.yarnpkg.com' \
+		| sort -u \
+		|| true
+)"
+
+if [ -n "$FOREIGN_HOSTS" ]; then
+	cat >&2 << EOF
+
+pre-commit: BLOCKED — yarn.lock in the index resolves against a non-public registry:
+
+$(printf '%s\n' "$FOREIGN_HOSTS" | sed 's/^/    /')
+
+Every \`resolved\` URL must be public in git — https://registry.npmjs.org/, or
+yarn's own default https://registry.yarnpkg.com — or clones without access to
+the host above cannot install.
+
+The clean filter strips a mirror automatically, but it is opt-in and off by
+default, and it takes the host from yarn: \`yarn install\` (prepare ->
+hooks:install) records whatever \`yarn config get registry\` reports. If that is
+already the host above, one install is all it needs:
+
+    yarn hooks:install
+    touch yarn.lock && git add yarn.lock
+
+Already opted in? Then \`git config --get yarnlock-registry.mirror\` disagrees
+with the host above — yarn was pointed somewhere else after the record was made,
+and the filter only ever strips the one it was given.
+
+Not using a mirror at all? Then something else resolved this lockfile against
+that host — re-resolve it against the public registry and stage the result.
+
+EOF
+	exit 1
+fi
+
+# ---------------------------------------------------------------------------
 # Gates 3 and 4 — lint, then 100% coverage, then Qodana. Same bars as CI, before
 # the commit instead of after the push.
 #
