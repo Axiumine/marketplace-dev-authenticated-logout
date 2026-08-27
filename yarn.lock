@@ -189,6 +189,13 @@
   resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-6.0.0.tgz#7b4720d7141f2f41ed55d42a4b383c60c520dd0c"
   integrity sha512-SNqJOkXoc4K1Uny/uehHdPgHnS2Qpp854PY8uKG4W4TvpjzqkytjFlF38XAZv+1FZZkajLU/KfJ6G8pgJvosaA==
 
+"@axiumine/marketplace-common@^1.0.0":
+  version "1.0.0"
+  resolved "https://registry.npmjs.org/@axiumine/marketplace-common/-/marketplace-common-1.0.0.tgz#375a5d8d5eca4d7170f4be9caa04130e22bcefe9"
+  integrity sha512-100xoP0Q4mxalBB3T6sAp+HWG1r+dqiwOhB0d3iBBq8RdTMNtrFmT8tUZ1pxX5XQbMMFpti3yLR5+BT3xmhkYA==
+  dependencies:
+    graphql-scalars "^1.25.0"
+
 "@babel/code-frame@^7.29.7":
   version "7.29.7"
   resolved "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.7.tgz#f2fbbfea87c44a21590ec515b778b2c26d8866e7"
@@ -2984,6 +2991,13 @@ graphql-depth-limit@^1.1.0:
   dependencies:
     arrify "^1.0.1"
 
+graphql-scalars@^1.25.0:
+  version "1.26.0"
+  resolved "https://registry.npmjs.org/graphql-scalars/-/graphql-scalars-1.26.0.tgz#a84a516689e8b259bddad3c5c40539a485032a84"
+  integrity sha512-o7BnU5yxAFUWTMKpC5yshB12DjzzoxLgEBO9OpOAcxodWrL3sPldD/fqVQoIfcqPH8OclyQilLtg3/7ZRqQUVQ==
+  dependencies:
+    tslib "^2.5.0"
+
 graphql@^14.5.3:
   version "14.7.0"
   resolved "https://registry.npmjs.org/graphql/-/graphql-14.7.0.tgz#7fa79a80a69be4a31c27dda824dc04dac2035a72"
@@ -4302,7 +4316,7 @@ tsc-alias@^1.9.1:
     normalize-path "^3.0.0"
     plimit-lit "^1.2.6"
 
-tslib@2.8.1, tslib@^2.1.0, tslib@^2.4.0, tslib@^2.6.3, tslib@~2.8.0:
+tslib@2.8.1, tslib@^2.1.0, tslib@^2.4.0, tslib@^2.5.0, tslib@^2.6.3, tslib@~2.8.0:
   version "2.8.1"
   resolved "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz#612efe4ed235d567e8aba5f2a5fab70280ade83f"
   integrity sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==

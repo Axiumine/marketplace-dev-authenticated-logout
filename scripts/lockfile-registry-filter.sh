@@ -115,9 +115,21 @@ case "${1:-}" in
 			fi
 		fi
 
+		# git runs clean and smudge from the TOP LEVEL of the working tree, never
+		# from the directory holding the file. In the fourteen repos where this
+		# script sits at a repo root the two are the same and "./scripts/…" resolves.
+		# In marketplace-services-status it does not: that package is a subdirectory
+		# of the workspace repo rather than a repo of its own, so the top level is the
+		# workspace and "./scripts/…" would name a file that is not there — git fails
+		# the filter on every checkout of yarn.lock, and the mirror host then survives
+		# into the index unstripped. --show-prefix is empty at a root and
+		# "marketplace-services-status/" there, so this one line is correct in both
+		# places and all fifteen copies stay byte-identical.
+		PREFIX="$(git rev-parse --show-prefix 2> /dev/null || true)"
+
 		git config "$CONFIG_KEY" "$MIRROR"
-		git config filter.yarnlock-registry.clean "./scripts/lockfile-registry-filter.sh clean"
-		git config filter.yarnlock-registry.smudge "./scripts/lockfile-registry-filter.sh smudge"
+		git config filter.yarnlock-registry.clean "./${PREFIX}scripts/lockfile-registry-filter.sh clean"
+		git config filter.yarnlock-registry.smudge "./${PREFIX}scripts/lockfile-registry-filter.sh smudge"
 		# Never mark the filter required: a missing script must degrade to
 		# passthrough rather than break checkout.
 		git config filter.yarnlock-registry.required false
