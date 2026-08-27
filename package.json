@@ -26,7 +26,8 @@
     "semgrep": "docker run --rm --network none -e HOME=/tmp -u \"$(id -u):$(id -g)\" -v \"$PWD\":/src -w /src semgrep/semgrep:1.172.0 semgrep scan --metrics=off --disable-version-check --scan-unknown-extensions --config semgrep/ $(find src -type f \\( -name '*.mts' -o -name '*.cts' -o -name '*.ts' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.js' \\))",
     "semgrep:ci": "docker run --rm --network none -e HOME=/tmp -u \"$(id -u):$(id -g)\" -v \"$PWD\":/src -w /src semgrep/semgrep:1.172.0 semgrep scan --metrics=off --disable-version-check --scan-unknown-extensions --error --sarif --output semgrep.sarif --config semgrep/ $(find src -type f \\( -name '*.mts' -o -name '*.cts' -o -name '*.ts' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.js' \\))",
     "qodana": "./qodana.sh",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "hooks:install": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks && ./scripts/lockfile-registry-filter.sh install || true",
+    "prepare": "yarn run hooks:install"
   },
   "engines": {
     "node": "^24.18.0"
