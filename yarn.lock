@@ -189,10 +189,10 @@
   resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-6.0.0.tgz#7b4720d7141f2f41ed55d42a4b383c60c520dd0c"
   integrity sha512-SNqJOkXoc4K1Uny/uehHdPgHnS2Qpp854PY8uKG4W4TvpjzqkytjFlF38XAZv+1FZZkajLU/KfJ6G8pgJvosaA==
 
-"@axiumine/marketplace-common@^1.0.0":
-  version "1.0.0"
-  resolved "https://registry.npmjs.org/@axiumine/marketplace-common/-/marketplace-common-1.0.0.tgz#375a5d8d5eca4d7170f4be9caa04130e22bcefe9"
-  integrity sha512-100xoP0Q4mxalBB3T6sAp+HWG1r+dqiwOhB0d3iBBq8RdTMNtrFmT8tUZ1pxX5XQbMMFpti3yLR5+BT3xmhkYA==
+"@axiumine/marketplace-common@^1.0.1":
+  version "1.0.1"
+  resolved "https://registry.npmjs.org/@axiumine/marketplace-common/-/marketplace-common-1.0.1.tgz#35539dda27385be149c3fa211bb00104a4851549"
+  integrity sha512-dyaZ70w5Nz3IuAuLuo3FME1ogI+f/SEu0W1CozuS39UbfwBvLzTkfuCQjydqeKFg6lM252GE30pqPrCQdq07zA==
   dependencies:
     graphql-scalars "^1.25.0"
 
