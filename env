@@ -4,10 +4,16 @@ DOMAIN=xxx.tdweb.lan
 REDIS_IS_CLUSTER=1
 #
 # Read ONLY when REDIS_IS_CLUSTER is not exactly the string '1'. koa-utils then builds a single-node
-# createClient({ url: REDIS_URL }) and ignores every REDIS_DB1..DB3 pair below. Empty because this
-# stack runs the cluster branch — but an empty value is not an error on the other branch: node-redis
-# falls back to redis://localhost:6379 and connects to the wrong server instead of refusing. Set it
-# before flipping the flag.
+# createClient({ url: resolveRedisUrl(REDIS_URL) }) and ignores every REDIS_DB1..DB3 pair below. Empty
+# because this stack runs the cluster branch — but an empty value is not an error on the other branch:
+# node-redis falls back to redis://localhost:6379 and connects to the wrong server instead of refusing.
+# Set it before flipping REDIS_IS_CLUSTER.
+#
+# ⚠️ REDIS_TLS is deliberately absent from this file and must stay absent here. koa-utils reads it since
+# 7.1.0: set to exactly the string 'true' it builds the cluster rootNodes as rediss://, carries TLS to
+# the nodes discovered behind them, and makes resolveRedisUrl refuse a REDIS_URL that is not rediss:// —
+# throwing at module load rather than connecting. Every other value, unset included, is off, which is
+# what leaves this leg cleartext (R45). The Redis this workspace runs serves no TLS listener.
 REDIS_URL=
 REDIS_DB1_HOST=db1
 REDIS_DB2_HOST=db2

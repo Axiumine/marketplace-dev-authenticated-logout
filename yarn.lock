@@ -184,10 +184,10 @@
   resolved "https://registry.npmjs.org/@axiumine/eslint-config-be/-/eslint-config-be-2.0.2.tgz#23f0e79981bce36ad09979ae0b27b23a1183cec6"
   integrity sha512-uOuWXo093AVrrO5jW46v+F2mW7k+yz0cH5NCU/bGv0gnnFxAfmO6dhW19SbdT6uL/1CbX5DiGeKC/hVPdZY+FA==
 
-"@axiumine/koa-utils@^7.0.0":
-  version "7.0.0"
-  resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-7.0.0.tgz#df7f93668107ec1b1442d1dc215fd287a3add452"
-  integrity sha512-V1VdbDkXTBlSvJcTEwWma3K6DZU1kPjMPoNcaomCmquCKWBQ89frWrk55SwmYxO1ApojuWa2G+/TdqnSGupCaA==
+"@axiumine/koa-utils@^7.1.0":
+  version "7.1.0"
+  resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-7.1.0.tgz#929095345ef34839854802bed6b17c8040c99d7d"
+  integrity sha512-OnBROgaMfVOriERRPU3lQBrZ8xJg4zZs3LxVeeEr/IrTqSjB2xqgmlDlSZSPyYH9XYwZkp5b9SwvIzc+9JvfQQ==
 
 "@axiumine/marketplace-common@^2.0.0":
   version "2.0.1"
