@@ -26,7 +26,7 @@ export const ENDPOINT = '/logout'
  * How this service names itself in the keygrip holders table (ADR-034).
  *
  * ⚠️ It is the repository name, spelled out rather than derived from anything: the table is read by an
- * operator deciding whether all five signing-key holders agree, and a row labelled from `process.title`
+ * admin deciding whether all five signing-key holders agree, and a row labelled from `process.title`
  * or from a package field would rename itself the day either changes, silently orphaning the old row.
  */
 export const SERVICE_NAME = 'marketplace-dev-authenticated-logout'
@@ -237,7 +237,7 @@ export async function start() {
 		/****************
 		 * Live key adoption (ADR-034)
 		 *
-		 * The half that makes rotation an operator action rather than a deploy: when the record moves, this
+		 * The half that makes rotation an admin action rather than a deploy: when the record moves, this
 		 * process rebuilds its `Keygrip` in place. Without it the new key would reach this service only at
 		 * the next restart, and the platform would spend that window signing with two different index-0
 		 * keys — the failure the record was introduced to end.

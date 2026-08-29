@@ -8,9 +8,9 @@ import { ITEST_REDIS_KEY } from '../../vitest.keygrip.mts'
  * The other half of ADR-034's boot gate: no record at all, rather than a record this process cannot open.
  *
  * Two failures, two tests, because they need two different fixes and the message has to say which. A
- * missing record means nobody has minted a key set yet — or Redis was flushed — and the operator runs the
+ * missing record means nobody has minted a key set yet — or Redis was flushed — and the admin runs the
  * seed script; a mismatched KEK (keygripFailure.itest.mts) means a key set exists and THIS service is the
- * one that is wrong. A boot log that conflated them would send an operator to edit an environment file
+ * one that is wrong. A boot log that conflated them would send an admin to edit an environment file
  * that is already correct.
  *
  * ⚠️ The record is not deleted to produce this. The suite's own record is shared by every file in the
@@ -37,7 +37,7 @@ describe('start() when no keygrip record has been seeded', () => {
 		try {
 			await expect(start()).resolves.toBeUndefined()
 
-			// The message an operator reads at 3am. It names the key that is empty and the command that
+			// The message an admin reads at 3am. It names the key that is empty and the command that
 			// fills it, because "missing" without a next step is a message that costs an outage.
 			const [, error] = errorLog.mock.calls.find(([label]) => label === 'error') as [string, Error]
 			expect(error.message).toMatch(/^KEYGRIP_RECORD_MISSING: no keygrip key set at "/)

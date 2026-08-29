@@ -37,7 +37,7 @@ describe('start() when the KEK does not open the keygrip record', () => {
 		try {
 			await expect(start()).resolves.toBeUndefined()
 
-			// The message an operator reads at 3am. It names the failure and the record, and — deliberately
+			// The message an admin reads at 3am. It names the failure and the record, and — deliberately
 			// — no key material: this line goes to a boot log.
 			const [, error] = errorLog.mock.calls.find(([label]) => label === 'error') as [string, Error]
 			expect(error.message).toMatch(/^KEYGRIP_KEK_MISMATCH: this service cannot unwrap keygrip record version 1 \(\w{12}\)\./)
