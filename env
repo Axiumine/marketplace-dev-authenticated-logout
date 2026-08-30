@@ -38,7 +38,7 @@ UPLOAD_DIR=/media/xxx
 # services reads either, and no `dist/` file in either @axiumine package does. Neither was in
 # REQUIRED_ENV_VARS, so nothing failed when they were unset — every environment simply carried two
 # values that did nothing. Do not add them back: a template that lists names nothing reads teaches
-# operators to skim it, which is the one thing it cannot afford.
+# admins to skim it, which is the one thing it cannot afford.
 # ⚠️ Development-only, and the gate is code rather than convention (E13-S11): the
 # `x-introspectioncode` header is honoured only when NODE_ENV is exactly `development` or `test`, and
 # refused under every other value — unset, empty, `staging`, `Production`, a typo. In production it
