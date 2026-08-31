@@ -27,7 +27,7 @@ beforeAll(async () => {
 })
 
 /*
- * The one shape a session key has (E13-S01), and the only one deleted since E13-S10: the digest of the
+ * The one shape a session key has, and the only one still deleted: the digest of the
  * prefixed token. The second delete this resolver used to issue — the token itself, the pre-cutover shape —
  * went with the fallback that could read it, so every assertion below is a single key per half.
  *
@@ -39,7 +39,7 @@ const REFRESH_KEY = `test:${REFRESH_DIGEST}`
 const ACCESS_KEY = 'test:c12bbd0040e3933bb83bdb74cbf57db678068b4d380022f9d178022289b3406e'
 
 /*
- * What a session hash holds that this service cares about, and the index row it produces (E15-S03). The
+ * What a session hash holds that this service cares about, and the index row it produces. The
  * account id and the tier come out of the hash rather than out of a constant here — this is the one
  * service shared by all three tiers, so it has no tier of its own to assume.
  */
@@ -48,7 +48,7 @@ const SESSION_HASH = { _id: ACCOUNT_ID, tier: 'shopOwner' }
 const INDEX_KEY = `test:idx:shopOwner:${ACCOUNT_ID}`
 
 /*
- * The key of the access token minted beside this refresh token, as the login filed it (E14-S06).
+ * The key of the access token minted beside this refresh token, as the login filed it.
  *
  * ⚠️ **A key, and one this file never derives.** It is stored whole — prefix and digest — so the resolver
  * has nothing to hash and nothing to guess, and a literal unrelated to any token in this file is exactly
@@ -61,7 +61,7 @@ const INDEX_KEY = `test:idx:shopOwner:${ACCOUNT_ID}`
 const BOUND_ACCESS_KEY = 'test:9f6d3a1c0b7e45d28c1a5f0e3b9d47a6c2e8f10b4d7a93c65e2f8a0b1d4c7e93'
 
 // minimal ctx: the resolver only uses state.user and cookies.set
-// `user` is optional here for the same reason it is optional on the resolver's own context type (E15-S09):
+// `user` is optional here for the same reason it is optional on the resolver's own context type:
 // the introspection bypass reaches the resolver without ever populating it, and a helper that could not
 // express that shape is a helper that could not test it.
 function makeCtx(user?: { refreshToken?: string; accessToken?: string }) {
@@ -116,7 +116,7 @@ describe('mutations.logout', () => {
 	})
 
 	/*
-	 * ⚠️ **The whole of E14-S06's residual, at the logout end of it.** `authorizationLogoutHandler` leaves
+	 * ⚠️ **The whole of the access-key residual, at the logout end of it.** `authorizationLogoutHandler` leaves
 	 * `accessToken` unset whenever the presented token's session is already gone — the ordinary state of a
 	 * tab that has not refreshed since another one did, because a rotation kills the access token it
 	 * replaces. Every name this resolver could once reach for was then absent, and the *live* access token
@@ -178,7 +178,7 @@ describe('mutations.logout', () => {
 	})
 
 	/*
-	 * A session minted before the index existed (E15-S02) carries no tier and no `_id`, and was never filed
+	 * A session minted before the index existed carries no tier and no `_id`, and was never filed
 	 * under anything. The fields are checked rather than assumed because the alternative is not a harmless
 	 * miss: `undefined` reaches a template as the word `undefined`, so the unguarded call would delete a
 	 * field from `test:idx:undefined:undefined` — a key one future writer away from being real.
@@ -199,10 +199,10 @@ describe('mutations.logout', () => {
 	})
 
 	/*
-	 * The shape the old context type said could not exist (E15-S09). `x-introspectioncode` skips the whole
+	 * The shape the old context type said could not exist. `x-introspectioncode` skips the whole
 	 * authentication block in `authorizationLogoutHandler`, so the resolver runs with `ctx.state` as Koa left
 	 * it — no `user`, no tokens, nothing to delete. The Sentry assertion is the load-bearing one: before this
-	 * story the same call dereferenced `undefined`, and the TypeError it threw was caught and reported as if
+	 * change the same call dereferenced `undefined`, and the TypeError it threw was caught and reported as if
 	 * a session teardown had failed.
 	 */
 	it('deletes nothing and reports nothing when the context carries no session', async () => {

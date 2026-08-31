@@ -52,7 +52,7 @@ harder to spot locally than in production.
 ⚠️ **`x-introspectioncode` skips the whole authentication block.** It exists so schema introspection can
 run without a session; it means a request carrying that header reaches the resolver with `ctx.state` unset.
 The resolver's context type says so — `state.user` is optional there and required in `IContextLogout`, and
-the gap is deliberate (E15-S09): the shared type is right for the services whose middleware always fills it
+the gap is deliberate: the shared type is right for the services whose middleware always fills it
 and wrong for this one. A resolver here that assumes a session is a resolver that throws on that path.
 
 ## Related files

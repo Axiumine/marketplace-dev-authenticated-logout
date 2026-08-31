@@ -18,7 +18,7 @@ it runs is `VulnerableLibrariesLocal`, an offline heuristic that queries no advi
 on every repo on this platform; the class that does query one ships in the same image and is in no
 profile. The trivy step is the check that reports — it reads `yarn.lock` natively, suppresses
 devDependencies, and blocks on HIGH or CRITICAL with the CVE id and the fixed version. Bypass for a Docker
-or network outage, never for a finding: `SKIP_TRIVY=1 git push`. E18-S11.
+or network outage, never for a finding: `SKIP_TRIVY=1 git push`.
 
 `git commit` runs `.githooks/pre-commit`, which is the secret guard *and* three of those six — lint,
 coverage, Qodana. Semgrep, trivy and mutation are pre-push only.

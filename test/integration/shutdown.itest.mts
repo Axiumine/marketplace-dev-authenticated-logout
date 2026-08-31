@@ -69,7 +69,7 @@ describe('production hardening actually applies to a real server', () => {
 	 *
 	 * authorizationLogoutHandler runs in front of Apollo on this service, so the request needs a
 	 * credential to reach the validation stage at all. It used to be the `x-introspectioncode` header;
-	 * since E13-S11 that header does nothing outside `development` and `test`, and the whole point of
+	 * that header now does nothing outside `development` and `test`, and the whole point of
 	 * booting this server is that it is neither. So the request carries a real signed refresh cookie
 	 * and the session hash behind it, exactly as a logged-in caller would — which also makes the
 	 * assertion stronger: introspection is refused for an authenticated caller, not merely for an
@@ -87,7 +87,7 @@ describe('production hardening actually applies to a real server', () => {
 
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {
-			// The whole hash a login writer produces, not one field of it (E15-S01) — see
+			// The whole hash a login writer produces, not one field of it — see
 			// `test/helpers/sessionFixtures.mts`.
 			await redisClient.hSet(refreshKey, asHash(REFRESH_SESSION))
 

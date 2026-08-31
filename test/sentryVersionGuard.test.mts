@@ -4,7 +4,7 @@ import { sentryBeforeSend } from '@axiumine/marketplace-common/others/sentryBefo
 import { describe, expect, it } from 'vitest'
 
 /*
- * E12-S05 — the guard that fires when the Sentry SDK moves under this configuration.
+ * The guard that fires when the Sentry SDK moves under this configuration.
  *
  * Everything `src/instrument.mts` asserts about the SDK was read out of `node_modules` at 10.69.0:
  * that supplying `dataCollection` at all swaps the base for the fully permissive `DEFAULTS`, that `[]`
@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest'
 const PINNED = '10.69.0'
 
 const MIGRATION =
-	'E12-S05: the Sentry SDK moved off 10.69.0. Re-read `resolveDataCollectionOptions`, `httpServerSpansIntegration` and `httpServerIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from. E12-S21: `maxIncomingRequestBodySize` defaults to `"medium"` and the default is the defect — check the name still forwards to `httpServerIntegration`s `maxRequestBodySize`, and that `include.data` on the requestdata integration is still what makes the body an event field.'
+	'the Sentry SDK moved off 10.69.0. Re-read `resolveDataCollectionOptions`, `httpServerSpansIntegration` and `httpServerIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from. `maxIncomingRequestBodySize` defaults to `"medium"` and the default is the defect — check the name still forwards to `httpServerIntegration`s `maxRequestBodySize`, and that `include.data` on the requestdata integration is still what makes the body an event field.'
 
 const installedVersion = async (name: string): Promise<string> => {
 	const manifest = await readFile(new URL(`../node_modules/@sentry/${name}/package.json`, import.meta.url), 'utf8')
@@ -49,7 +49,7 @@ describe('the scrubber owes nothing to the SDK filtering anything', () => {
 		})
 	})
 
-	// E12-S21's second layer. `maxIncomingRequestBodySize: 'none'` is what stops the bytes being captured;
+	// The second layer. `maxIncomingRequestBodySize: 'none'` is what stops the bytes being captured;
 	// this is what removes them from an event that somehow carries them anyway — a hook the SDK calls with
 	// a body it collected under a different option, or a default that moves on a bump.
 	it('removes a request body no SDK option was asked to withhold', () => {

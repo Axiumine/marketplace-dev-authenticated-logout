@@ -84,7 +84,7 @@ afterAll(async () => {
 })
 
 /*
- * ⚠️ **The sessions are seeded whole, in the shape the writers write** (E15-S01) — see
+ * ⚠️ **The sessions are seeded whole, in the shape the writers write** — see
  * `test/helpers/sessionFixtures.mts` for why. Over a live cluster the argument is even simpler than it is
  * in the unit suite: if the handler asks for a field no login writes, the lookup really misses, and the
  * request really comes back 204 instead of 200.
@@ -160,7 +160,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	})
 
 	/*
-	 * ⚠️ **The inverted E13-S02 test** (E13-S10), against the real cluster. The seed is byte-for-byte the
+	 * ⚠️ **The inverted raw-key test**, against the real cluster. The seed is byte-for-byte the
 	 * one that used to prove the dual-read worked — a whole refresh session under the **pre-cutover shape**,
 	 * the token as the key name — and the expected answer is now its opposite: 204, the session is not
 	 * found, and the key is still sitting there untouched afterwards.
@@ -192,7 +192,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	})
 
 	/*
-	 * ⚠️ **The residual E14-S06 left, against the live cluster.** The header names an access token that
+	 * ⚠️ **The access-key residual, against the live cluster.** The header names an access token that
 	 * is no longer there — an ordinary state, since a rotation kills the access token it replaces and the
 	 * tab sending this logout has not refreshed since another one did — so `authorizationLogoutHandler`
 	 * leaves `accessToken` unset and every name the resolver could once reach for is absent. The token
@@ -259,7 +259,7 @@ describe('logout service (integration, real Redis cluster)', () => {
 	 * carry that distinction; a mock would have to be told to treat "exists" and "has this field"
 	 * differently.
 	 *
-	 * ⚠️ Seeded from `IRefreshData` minus `_id` rather than from an invented field name (E15-S01): a hash
+	 * ⚠️ Seeded from `IRefreshData` minus `_id` rather than from an invented field name: a hash
 	 * whose only field is one no writer writes proves nothing about which field the reader should ask for,
 	 * and that is the assertion the previous version of this test was quietly making.
 	 */
@@ -342,12 +342,12 @@ describe('logout service (integration, real Redis cluster)', () => {
 	})
 
 	/*
-	 * The introspection bypass and the resolver, now agreeing about what they are doing (E15-S09).
+	 * The introspection bypass and the resolver, now agreeing about what they are doing.
 	 *
 	 * With a valid x-introspectioncode and neither cookie nor Authorization header, the handler takes its
 	 * `introspection` exit and never assigns `ctx.state`. The resolver sees no session on its context and
 	 * returns `true` without touching Redis or the cookie — which is what this test asserts, and what it
-	 * asserted before the story too: the observable behaviour did not change.
+	 * asserted beforehand too: the observable behaviour did not change.
 	 *
 	 * What changed is how it was reached. The resolver's first statement used to dereference
 	 * `ctx.state.user.refreshToken` on an undefined user, and the `true` the caller received was a TypeError

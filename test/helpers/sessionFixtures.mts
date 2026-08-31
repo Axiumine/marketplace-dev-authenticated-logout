@@ -3,8 +3,7 @@ import type { IRedisDataUser } from '@axiumine/marketplace-common/others/Redis/I
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
 
 /*
- * ⚠️ **The two session hashes as the writers really produce them, and the reason this file exists**
- * (E15-S01).
+ * ⚠️ **The two session hashes as the writers really produce them, and the reason this file exists**.
  *
  * Every test in this service used to seed one field, named after whatever the handler asked for —
  * `hSet(refreshKey, 'id', 'itest')`. No writer on this platform has ever written an `id` field: the refresh
@@ -26,7 +25,7 @@ import { TIER } from '@axiumine/marketplace-common/others/Tier'
 /**
  * The refresh-token session hash, exactly as a login writer or a rotation writes it.
  *
- * ⚠️ `accessKey` names the access half of the pair (E14-S06) and is written by every login and every
+ * ⚠️ `accessKey` names the access half of the pair and is written by every login and every
  * rotation, so it belongs here — a fixture without it would seed a session shape the platform stopped
  * producing. The value is a plausible key that names nothing on the cluster, which is the case a suite
  * has to survive anyway: an access token expires long before its refresh token, so most of a session's

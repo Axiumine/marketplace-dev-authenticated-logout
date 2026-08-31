@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Six gates, all blocking:
 #   1. semgrep  — SAST: vendored rules, pinned image, offline (yarn semgrep:ci)
-#   2. trivy    — dependency advisories, HIGH+ , production tree only (E18-S11)
+#   2. trivy    — dependency advisories, HIGH+ , production tree only
 #   3. lint     — eslint + prettier --check over the whole tree (yarn lint:check)
 #   4. coverage — 100% on every metric (yarn test:cov)
 #   5. mutation — 100% mutation score (yarn test:mutation)
@@ -236,7 +236,7 @@ fi
 # advisory feed at all. `VulnerableLibrariesGlobalInspection`, the class in the
 # same image that does call vulnerability-search.jetbrains.com, appears in no
 # profile file and in no scan log this workspace has ever produced. A security
-# check that cannot report is indistinguishable from a passing one. E18-S11.
+# check that cannot report is indistinguishable from a passing one.
 #
 # Not `yarn audit`: yarn 1 aborts the entire run over the unpublished
 # @axiumine/marketplace-common, and `npm audit` needs a package-lock.json this
@@ -523,7 +523,7 @@ PUSH BLOCKED — Qodana failed.
 
 The gate lives in qodana.yaml: testCoverageThresholds 100 total / 100 fresh,
 plus the third-party license audit. The vulnerable-dependency inspection it also
-runs is the offline heuristic E18-S11 measured at zero — the real check is the
+runs is the offline heuristic measured at zero — the real check is the
 trivy gate above.
 Findings are listed above, with a report link on qodana.cloud.
 
