@@ -18,14 +18,14 @@ import { describe, expect, it } from 'vitest'
 
 const FIXTURES = new URL('./fixtures/restrictedSyntax/', import.meta.url)
 
-const TLS_MESSAGE = 'E12-S04: certificate verification stays on.'
-const PII_MESSAGE = 'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false.'
-const BODY_MESSAGE = 'E12-S21: the request body is never captured.'
-const HOOKS_MESSAGE = 'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all.'
-const KEYGRIP_MESSAGE = 'E01-S15: KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034.'
+const TLS_MESSAGE = 'certificate verification stays on.'
+const PII_MESSAGE = 'the blanket Sentry PII flag is absent by decision, not set to false.'
+const BODY_MESSAGE = 'the request body is never captured.'
+const HOOKS_MESSAGE = '`beforeSend` and `beforeSendTransaction` are wired together or not at all.'
+const KEYGRIP_MESSAGE = 'KEYGRIP_KEY_1/KEYGRIP_KEY_2 are gone since ADR-034.'
 
 /*
- * The path matters as much as the code since E01-S15: the keygrip ban is scoped to `src/**`, so the same
+ * The path matters as much as the code: the keygrip ban is scoped to `src/**`, so the same
  * fixture text is a finding at one path and silent at the other. Both are linted here — a fixture that
  * only ever ran at a test path could not tell a correctly scoped rule from one that stopped firing.
  *
@@ -65,8 +65,6 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 })
 
 /*
- * E01-S15.
- *
  * `KEYGRIP_KEY_1`/`KEYGRIP_KEY_2` stopped being read when ADR-034 moved the signing keys into a wrapped
  * Redis record. Reading one here again would sign cookies the other four services cannot verify, and the
  * only symptom is a browser that is silently logged out — so the names are refused rather than merely

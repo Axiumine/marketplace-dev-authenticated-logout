@@ -29,7 +29,7 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 	// refresh
 	const cookie = ctx.request.header?.cookie // refresh
 	if (typeof cookie === 'undefined') {
-		// ⚠️ The environment gate is evaluated **before** the code is read (E13-S11). Outside `development`
+		// ⚠️ The environment gate is evaluated **before** the code is read. Outside `development`
 		// and `test` the bypass does not exist at all, and a caller sending the correct header gets exactly
 		// the error a caller sending nothing gets — a wrong code and a disabled feature must not be
 		// distinguishable from the outside. `INTROSPECTION_CODE` stays in REQUIRED_ENV_VARS regardless:
@@ -38,7 +38,7 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 		// This handler checks twice, once here for the cookie and once below for the Authorization header,
 		// and both checks are gated: a request carrying neither is exactly the shape the bypass admits.
 		//
-		// Both comparisons are `constantTimeEquals`, never `===` (E13-S03): string equality stops at the first
+		// Both comparisons are `constantTimeEquals`, never `===`: string equality stops at the first
 		// differing character, and that gradient is a working oracle for the configured value.
 		if (
 			isIntrospectionBypassAllowed() &&
@@ -77,11 +77,11 @@ export const authorizationLogoutHandler = (keys: Keygrip) => async (ctx: IContex
 
 	if (!introspection) {
 		const refreshToken = verifySignedRefreshToken(ctx as unknown as IContextRefresh, keys)
-		// Keyed by the digest of the token, and by nothing else since E13-S10 removed the raw-key fallback.
+		// Keyed by the digest of the token, and by nothing else since the raw-key fallback was removed.
 		// This service is the one that must never miss: a logout that cannot find the session answers
 		// `throwAlreadyDone` and leaves a live credential behind after telling the user they are out.
 		//
-		// ⚠️ **`_id`, and the name is the whole story of E15-S01.** This read asked for `id` for as long as
+		// ⚠️ **`_id`, and the name is the whole defect.** This read asked for `id` for as long as
 		// the service existed, and no writer has ever written that field: the refresh hash is `IRefreshData`,
 		// whose identity field is `_id` — written by the three login writers and by `refreshSessionTokens`.
 		// `hGet` therefore returned `null` for every real session, this handler took the branch below, and

@@ -10,7 +10,7 @@ import { GraphQLBoolean, GraphQLNonNull } from 'graphql'
 dotenv.config()
 
 /*
- * ⚠️ **What reaches this resolver is not an `IContextLogout`, and E15-S09 is the story of pretending it was.**
+ * ⚠️ **What reaches this resolver is not an `IContextLogout`, and this file used to pretend it was.**
  * `IContextLogout` declares `state.user` as always present. Apollo hands the resolver the raw Koa `ctx`
  * (`src/index.mts:171-178`), and `authorizationLogoutHandler` fills `state.user` on the authenticated path
  * only: a request admitted by the `x-introspectioncode` bypass skips that whole block and arrives here with
@@ -49,18 +49,18 @@ export const logout = {
 
 			// delete the access token used to make this call
 			// and, if it still exists, the refresh token too
-			// ⚠️ One key shape, since E13-S10. This used to delete two, because a session being revoked could
-			// predate the E13-S01 cutover; nothing on the platform can read that shape any more, so a second
+			// ⚠️ One key shape now. This used to delete two, because a session being revoked could
+			// predate the cutover; nothing on the platform can read that shape any more, so a second
 			// delete would be a round trip per logout against a key that cannot exist.
 			await deleteSession(redisClient, user.refreshToken)
 
-			// ⚠️ **After the delete, never before** (E15-S03). Unfiled first, a still-usable refresh token is
+			// ⚠️ **After the delete, never before.** Unfiled first, a still-usable refresh token is
 			// listed nowhere for the width of the window between the two calls, and a revocation running in it
 			// misses the session entirely. This order can only leave a row naming a key that is already gone,
 			// and the field's own TTL removes that row even if this call never runs.
 			//
 			// Both fields are checked rather than assumed: `indexSession` writes an `_id` and a tier into every
-			// row it creates, so a hash carrying neither was never indexed — a session minted before E15-S02,
+			// row it creates, so a hash carrying neither was never indexed — a session minted before the index existed,
 			// or the empty hash `readSessionHash` answers on a miss. Passing the string
 			// `'undefined'` on into a key name would build `idx:undefined:undefined` and delete from it.
 			const tier = Object.values(TIER).find((known) => known === session.tier)

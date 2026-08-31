@@ -15,12 +15,12 @@ const keys = new Keygrip(['test-key-1', 'test-key-2'], 'sha512', 'base64')
 const REFRESH = '27119032-9043-4a9f-bd4c-9d06fd576290'
 
 /*
- * Where a session lives since E13-S01: the shared prefix plus the digest of the **prefixed** token. The
+ * Where a session lives: the shared prefix plus the digest of the **prefixed** token. The
  * digests are written out as literals, computed elsewhere — a test that hashed the token with the call the
  * implementation makes would agree with it about any algorithm, including a mutated one.
  *
- * The raw keys below are the shape everything wrote before the E13-S01 cutover. Nothing builds them any
- * more — E13-S10 deleted the fallback that read them — and they are kept here as the negative fixture the
+ * The raw keys below are the shape everything wrote before the cutover. Nothing builds them any
+ * more — the fallback that read them is deleted — and they are kept here as the negative fixture the
  * inverted test seeds: a key that must now resolve to nothing.
  */
 const REFRESH_KEY = 'test:fd62e117b7af852f29f12e502a239d1b8f31afa959d463de0368d684452cefa5'
@@ -31,7 +31,7 @@ const ACCESS_RAW_KEY = 'test:access:xyz'
 /*
  * Every other test in this file tells the mock what to answer; this one hands it what a session *is* — the
  * hashes `sessionFixtures.mts` builds from `IRefreshData` and `IRedisDataUser` — and makes the handler find
- * its identity inside them. See that file for why the distinction is the whole of E15-S01.
+ * its identity inside them. See that file for why the distinction matters.
  *
  * Answers exactly as Redis would: an absent field is `null`, not `undefined`.
  */
@@ -179,14 +179,14 @@ describe('authorizationLogoutHandler', () => {
 	})
 
 	/*
-	 * ⚠️ **The inverted E13-S02 test** (E13-S10). The fixture is unchanged — both halves of a session
+	 * ⚠️ **The inverted raw-key test.** The fixture is unchanged — both halves of a session
 	 * sitting under the pre-cutover raw keys, and nothing under either digest — and the answer flips: the
 	 * handler finds no refresh session, so the logout is `throwAlreadyDone` rather than a revocation.
 	 *
 	 * This service is the one that used to have the strongest case for the fallback, since a logout that
 	 * misses leaves a live credential behind after telling the user they are out. What removes the case is
-	 * that no session of this shape can exist: the cutover was never deployed, and every writer has hashed
-	 * since E13-S01. Both raw keys are still seeded here so that a reintroduced fallback fails loudly.
+	 * that no session of this shape can exist: the cutover was never deployed, and every writer hashes.
+	 * Both raw keys are still seeded here so that a reintroduced fallback fails loudly.
 	 */
 	it('refuses a session written under the raw keys, and reads neither of them', async () => {
 		hGet.mockImplementation(async (key: string) => (key === REFRESH_RAW_KEY || key === ACCESS_RAW_KEY ? 'session-id' : null))
@@ -215,11 +215,11 @@ describe('authorizationLogoutHandler', () => {
 	})
 
 	/*
-	 * ⚠️ **The regression test for E15-S01, and the only one in this file the reader cannot satisfy by
+	 * ⚠️ **The regression test for the `_id` read, and the only one in this file the reader cannot satisfy by
 	 * agreeing with itself.** The mock answers out of `REFRESH_SESSION` and `ACCESS_SESSION` — the hashes
 	 * `IRefreshData` and `IRedisDataUser` describe, which is what the four writers actually put in Redis —
 	 * so the field this handler asks for has to be a field a login really writes. Ask for `id`, as this
-	 * service did until E15-S01, and both reads miss, `throwAlreadyDone` fires, and the assertions below
+	 * service once did, and both reads miss, `throwAlreadyDone` fires, and the assertions below
 	 * fail instead of passing against a hash shaped to order.
 	 *
 	 */
@@ -260,7 +260,7 @@ describe('authorizationLogoutHandler', () => {
 		expect(next).not.toHaveBeenCalled()
 	})
 	/*
-	 * E13-S11, and twice over: this handler consults the code once for the cookie and once for the
+	 * The environment gate, and twice over: this handler consults the code once for the cookie and once for the
 	 * `Authorization` header, so both checks are gated and both are asserted. Outside `development` and
 	 * `test` the code is never read, and each site refuses with the precondition it was already
 	 * refusing with — a caller cannot tell a wrong code from a disabled feature.

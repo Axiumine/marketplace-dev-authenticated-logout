@@ -100,7 +100,7 @@ describe('instrument', () => {
 		])
 	})
 
-	// 🔴 E12-S21. The measured defect: `dataCollection.httpBodies: []` gates the span attribute only, so
+	// 🔴 The measured defect: `dataCollection.httpBodies: []` gates the span attribute only, so
 	// the raw GraphQL envelope — password in the document and in `variables` — reached `event.request.data`
 	// on the shipped configuration. `'none'` is the value that stops the bytes being captured at all.
 	it('switches the incoming request body off at the only gate that reaches it', async () => {
@@ -110,7 +110,7 @@ describe('instrument', () => {
 		expect(initOptions().integrations).toStrictEqual([{ name: 'Http', options: { maxIncomingRequestBodySize: 'none' } }])
 	})
 
-	// E12-S23. The defect is an *absent* option resolving to a plausible default — the captured event read
+	// The defect is an *absent* option resolving to a plausible default — the captured event read
 	// "production" from a service that had just logged "for development" — so the test names the option.
 	it('labels the events with the environment the process is running as', async () => {
 		await importInstrument(DSN)
@@ -142,7 +142,7 @@ describe('instrument', () => {
 		expect(dataCollection.graphQL).toStrictEqual({ document: true, variables: false })
 	})
 
-	// E12-S22. Both hooks, and the same function in both: the SDK routes transaction events to
+	// Both hooks, and the same function in both: the SDK routes transaction events to
 	// `beforeSendTransaction` alone, and the four network-derived attributes are on the transaction.
 	it.each(['beforeSend', 'beforeSendTransaction'])(
 		'wires the shared scrubber as %s, and what is wired really scrubs',

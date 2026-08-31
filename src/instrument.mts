@@ -13,7 +13,7 @@ import * as Sentry from '@sentry/node'
  * services called `Sentry.init` unconditionally, so a service with reporting switched off still stood up
  * an SDK and a transport.
  *
- * ⚠️ **Nothing here configures TLS, and nothing here may.** Until E12-S01 this file handed `Sentry.init`
+ * ⚠️ **Nothing here configures TLS, and nothing here may.** This file once handed `Sentry.init`
  * a `transportOptions.httpModule` that turned certificate verification off on every outbound request —
  * unconditional on environment, in all nine services, and the only outbound HTTPS these repos configure
  * themselves. A collector behind a certificate this machine does not already trust is reached by
@@ -27,7 +27,7 @@ import * as Sentry from '@sentry/node'
  * nothing failing to say so, which is why the shapes that would reintroduce one are refused by the
  * `no-restricted-syntax` block in `eslint.config.js` rather than by review.
  *
- * ⚠️ **The SDK's blanket PII flag is absent rather than `false`** (E12-S03), so there is no character to
+ * ⚠️ **The SDK's blanket PII flag is absent rather than `false`**, so there is no character to
  * flip. It resolves to `httpBodies: ["incomingRequest", …]`, every request on this platform is a GraphQL
  * POST, and the attached body is therefore the envelope — which on
  * `marketplace-dev-admin-authenticated-resource` carries `adminUpdatePwd`'s `passwordOld` / `passwordNew`
@@ -43,9 +43,9 @@ import * as Sentry from '@sentry/node'
  * restrictive branch to the permissive one and **an omitted category is an enabled category**. A short
  * `dataCollection` carrying only the keys being turned off would read like a tightening while switching
  * request bodies, cookies and unfiltered headers on. Every key is written out for that reason, and the
- * arrival of a new one in a future release is caught by E12-S05's version guard.
+ * arrival of a new one in a future release is caught by the version guard in `test/sentryVersionGuard.test.mts`.
  *
- * ⚠️ **`httpBodies` does not stop the request body reaching an event, and never did** (E12-S21, measured).
+ * ⚠️ **`httpBodies` does not stop the request body reaching an event, and never did** (measured).
  * `@sentry/core` hard-wires `include.data = true` on the requestdata integration
  * (`integrations/requestdata.js:27-28`, above the comment *"dataCollection.httpBodies gates write-time,
  * not read-time"*), so the captured bytes are copied onto `event.request.data` whatever `httpBodies`
@@ -59,7 +59,7 @@ import * as Sentry from '@sentry/node'
  * out. The SDK's own `SENSITIVE_KEY_SNIPPETS` filtering is a second layer and a minor-version
  * implementation detail, never a reason to shorten the scrubber's list.
  *
- * ⚠️ **`beforeSendTransaction` is the same function, and both hooks are needed** (E12-S22, measured). The
+ * ⚠️ **`beforeSendTransaction` is the same function, and both hooks are needed** (measured). The
  * SDK routes transaction events to the second hook only, and the attributes the scrubber exists for —
  * `http.client_ip`, `http.user_agent`, `net.peer.ip`, `net.host.ip` — are on the transaction. With one
  * hook wired, switching on a `tracesSampleRate` would switch the redaction off.
@@ -67,20 +67,20 @@ import * as Sentry from '@sentry/node'
 if (process.env.DSN) {
 	Sentry.init({
 		dsn: process.env.DSN,
-		// E12-S23. Absent, this reads `production` on every stack — measured, on a service that had just
+		// Absent, this reads `production` on every stack — measured, on a service that had just
 		// logged "for development" — and Dev events land in the bucket the production alerts are built on.
 		// The fallback is `unknown` rather than `development`: an unset `NODE_ENV` on a real deployment
 		// would otherwise be labelled the one thing it is least likely to be, which is the same defect
 		// pointing the other way. Everything else in the process reads the same variable and treats
 		// anything that is not `production` as not production.
 		environment: process.env.NODE_ENV ?? 'unknown',
-		// E12-S21. This is the gate on the request body, and the only one: see the note above. It goes
+		// This is the gate on the request body, and the only one: see the note above. It goes
 		// through `httpIntegration` because that is the integration the SDK installs by default under the
 		// name `Http`, and a user instance of the same name replaces it. `maxIncomingRequestBodySize` is
 		// its spelling of the option `httpServerIntegration` reads as `maxRequestBodySize`.
 		integrations: [Sentry.httpIntegration({ maxIncomingRequestBodySize: 'none' })],
 		dataCollection: {
-			// The client address is a network-derived value this platform does not capture (E12-S06); this
+			// The client address is a network-derived value this platform does not capture; this
 			// is the switch that stops the SDK inferring one from the forwarding headers for `event.user`.
 			userInfo: false,
 			cookies: false,

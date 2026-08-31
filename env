@@ -31,15 +31,15 @@ NODE_ENV=development
 
 UPLOAD_DIR=/media/xxx
 
-# No SOCKETLABS_* here: this service sends no mail, and E18-S10 took both the credential pair and the
-# @socketlabs/email dependency out. Only marketplace-dev-public-resource needs them.
+# No SOCKETLABS_* here: this service sends no mail, and both the credential pair and the
+# @socketlabs/email dependency are gone. Only marketplace-dev-public-resource needs them.
 #
-# ⚠️ REDIRECT_DOMAIN and HIT_STATS stood here and are gone, E18-S13: no `src/` file in any of the nine
+# ⚠️ REDIRECT_DOMAIN and HIT_STATS stood here and are gone: no `src/` file in any of the nine
 # services reads either, and no `dist/` file in either @axiumine package does. Neither was in
 # REQUIRED_ENV_VARS, so nothing failed when they were unset — every environment simply carried two
 # values that did nothing. Do not add them back: a template that lists names nothing reads teaches
 # admins to skim it, which is the one thing it cannot afford.
-# ⚠️ Development-only, and the gate is code rather than convention (E13-S11): the
+# ⚠️ Development-only, and the gate is code rather than convention: the
 # `x-introspectioncode` header is honoured only when NODE_ENV is exactly `development` or `test`, and
 # refused under every other value — unset, empty, `staging`, `Production`, a typo. In production it
 # does nothing at all, and a request carrying it is answered exactly as one carrying nothing.

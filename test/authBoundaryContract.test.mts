@@ -6,7 +6,7 @@ import { requiredAuthBoundaryCases } from '@axiumine/marketplace-common/others/a
 import { describe, expect, it } from 'vitest'
 
 /*
- * E18-S02. The contract lives in `marketplace-common` and says what every authenticated service's boundary
+ * The contract lives in `marketplace-common` and says what every authenticated service's boundary
  * suite has to prove; this file is how *this* service answers for its share of it. Each required case is
  * carried by a `// AB-xx:` comment above the test that proves it, and the assertion below is that none of
  * them is missing — which is the check nobody could run before, because the list existed nowhere.
