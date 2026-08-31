@@ -64,6 +64,20 @@ export function checkRequiredEnv(env: NodeJS.ProcessEnv = process.env): void {
 			throw new Error(message)
 		}
 	}
+
+	/*
+	 * ⚠️ **`REDIS_URL` is required on the single-node branch and on that branch only**, which is why it is checked
+	 * here instead of being listed above. `REDIS_IS_CLUSTER=1` builds the cluster client out of the three
+	 * `REDIS_DB*` pairs and never reads it — the committed `env` template ships it empty for exactly that reason,
+	 * so a flat entry in the list would refuse the boot of a machine that is configured correctly.
+	 *
+	 * Any other value takes the `createClient({ url: resolveRedisUrl(REDIS_URL) })` branch, where node-redis
+	 * answers an unset url with its own default of `redis://localhost:6379`. Empty is not an error there: the
+	 * service connects to whatever happens to listen on this machine, writes every session into it and reports
+	 * itself healthy, which is a wrong-but-populated environment nothing downstream can tell from a right one
+	 * (`RISK_REGISTER` R04). `SETUP.md` puts a fresh machine on precisely that branch.
+	 */
+	if (env.REDIS_IS_CLUSTER !== '1' && !env.REDIS_URL) throw new Error('Missing required environment variable: REDIS_URL')
 }
 
 /**

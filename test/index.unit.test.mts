@@ -88,8 +88,10 @@ describe('checkRequiredEnv', () => {
 		])
 	})
 
+	// ⚠️ `REDIS_URL` is set here and is deliberately NOT in the list: it is required only when
+	// `REDIS_IS_CLUSTER` is not `'1'`, which is the branch a stub environment of `'x'` everywhere lands on.
 	it('passes when every required variable is set', () => {
-		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
+		const env = { ...Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x'])), REDIS_URL: 'redis://127.0.0.1:6379' }
 		expect(() => checkRequiredEnv(env)).not.toThrow()
 	})
 
@@ -107,6 +109,39 @@ describe('checkRequiredEnv', () => {
 		expect(REQUIRED_ENV_VARS).toContain('KEYGRIP_KEK')
 		expect(REQUIRED_ENV_VARS).not.toContain('KEYGRIP_KEY_1')
 		expect(REQUIRED_ENV_VARS).not.toContain('KEYGRIP_KEY_2')
+	})
+
+	/*
+	 * ⚠️ **The single-node branch — the one `SETUP.md` puts a fresh machine on.** `REDIS_URL` is not in
+	 * `REQUIRED_ENV_VARS` and must not be: the committed `env` ships it empty because this stack runs the
+	 * cluster branch, where nothing reads it. So the guard is a branch of its own and gets its own tests.
+	 * Unset, it is an error nowhere else — node-redis defaults the url to `redis://localhost:6379` and the
+	 * service connects to whatever answers there, which is the wrong-but-populated environment
+	 * `RISK_REGISTER` R04 describes.
+	 */
+	it('requires REDIS_URL when REDIS_IS_CLUSTER is not "1"', () => {
+		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
+		env.REDIS_IS_CLUSTER = '0'
+
+		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: REDIS_URL')
+	})
+
+	it('accepts the single-node branch once REDIS_URL names a server', () => {
+		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
+		env.REDIS_IS_CLUSTER = '0'
+		env.REDIS_URL = 'redis://127.0.0.1:6379'
+
+		expect(() => checkRequiredEnv(env)).not.toThrow()
+	})
+
+	// ⚠️ The cluster branch builds its client from REDIS_DB1..DB3 and never reads REDIS_URL, so demanding it
+	// here would refuse the boot of every machine this workspace ships configured. `'1'` exactly, as a
+	// string: that is the comparison koa-utils makes, and `1` or `'true'` takes the single-node branch.
+	it('does not require REDIS_URL on the cluster branch', () => {
+		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
+		env.REDIS_IS_CLUSTER = '1'
+
+		expect(() => checkRequiredEnv(env)).not.toThrow()
 	})
 })
 
@@ -244,7 +279,10 @@ const resetStartMocks = () => {
 	watchKeygrip.mockReset().mockResolvedValue(undefined)
 	subscriber.connect.mockReset().mockResolvedValue(undefined)
 	redisClient.duplicate.mockClear()
+	// ⚠️ `REDIS_URL` is stubbed on top of the list because it is not in it: the guard requires it only
+	// when `REDIS_IS_CLUSTER` is not `'1'`, and an environment stubbed `'x'` everywhere is that branch.
 	for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+	vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379')
 }
 
 describe('start (failure path)', () => {
@@ -451,6 +489,7 @@ describe('start (success path)', () => {
 describe('app.proxy', () => {
 	it('is off on the constructed Koa app', async () => {
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+		vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379')
 
 		const { app, apolloServer } = await createServer(KEYS)
 
@@ -470,6 +509,7 @@ describe('app.proxy', () => {
 describe('the signing keys', () => {
 	it('signs with the first key, verifies with the older one, and stays sha512', async () => {
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+		vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379')
 
 		const { apolloServer, keys } = await createServer(KEYS)
 		const newest = new Keygrip([KEYS[0].material], 'sha512')
@@ -503,6 +543,7 @@ describe('start (missing environment)', () => {
 
 	it('rejects — with no datasource touched — when a required variable is missing', async () => {
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, 'x')
+		vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379')
 		vi.stubEnv('REDIS_KEY', '')
 		RedisConnect.mockClear()
 		disconnectAllDatabases.mockClear()
