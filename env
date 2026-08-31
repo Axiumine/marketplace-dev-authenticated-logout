@@ -5,8 +5,9 @@ REDIS_IS_CLUSTER=1
 #
 # Read ONLY when REDIS_IS_CLUSTER is not exactly the string '1'. koa-utils then builds a single-node
 # createClient({ url: resolveRedisUrl(REDIS_URL) }) and ignores every REDIS_DB1..DB3 pair below. Empty
-# because this stack runs the cluster branch — but an empty value is not an error on the other branch:
-# node-redis falls back to redis://localhost:6379 and connects to the wrong server instead of refusing.
+# because this stack runs the cluster branch, where nothing reads it. On the other branch it is the only
+# thing naming the server, so checkRequiredEnv() refuses the boot rather than let it stay empty: node-redis
+# falls back to redis://localhost:6379 and would otherwise connect to the wrong server instead of refusing.
 # Set it before flipping REDIS_IS_CLUSTER.
 #
 # ⚠️ REDIS_TLS is deliberately absent from this file and must stay absent here. koa-utils reads it since
