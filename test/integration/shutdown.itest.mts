@@ -68,11 +68,9 @@ describe('production hardening actually applies to a real server', () => {
 	 * built, not that Apollo enforces it.
 	 *
 	 * authorizationLogoutHandler runs in front of Apollo on this service, so the request needs a
-	 * credential to reach the validation stage at all. It used to be the `x-introspectioncode` header;
-	 * that header now does nothing outside `development` and `test`, and the whole point of
-	 * booting this server is that it is neither. So the request carries a real signed refresh cookie
-	 * and the session hash behind it, exactly as a logged-in caller would — which also makes the
-	 * assertion stronger: introspection is refused for an authenticated caller, not merely for an
+	 * credential to reach the validation stage at all: it carries a real signed refresh cookie and the
+	 * session hash behind it, exactly as a logged-in caller would — which also makes the assertion
+	 * stronger, since introspection is refused for an authenticated caller rather than merely for an
 	 * unauthenticated one.
 	 */
 	it('refuses introspection when booted as production', async () => {

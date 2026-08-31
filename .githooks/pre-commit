@@ -93,9 +93,9 @@ SECRET_VALUE+='|KEYGRIP_KEY_[12][[:space:]]*=[[:space:]]*"[^x"]{40}'
 # way the [^x] rules above allow.
 SECRET_VALUE+='|KEYGRIP_KEK[[:space:]]*=[[:space:]]*"?[A-Za-z0-9+/]{43}='
 # dotenv style: KEY=<16+ chars>, at line start (a leading + from the diff is stripped first)
-SECRET_VALUE+='|^[[:space:]]*(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)=[^$x[:space:]][^[:space:]]{15,}'
+SECRET_VALUE+='|^[[:space:]]*(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|NPM_TOKEN)=[^$x[:space:]][^[:space:]]{15,}'
 # code style: KEY = "<16+ chars>" — a quoted literal, never process.env.KEY
-SECRET_VALUE+='|(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|INTROSPECTION_CODE|NPM_TOKEN)[[:space:]]*[:=][[:space:]]*["'"'"'][^$x"'"'"'][^"'"'"']{15,}["'"'"']'
+SECRET_VALUE+='|(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|NPM_TOKEN)[[:space:]]*[:=][[:space:]]*["'"'"'][^$x"'"'"'][^"'"'"']{15,}["'"'"']'
 SECRET_VALUE+='|mongodb(\+srv)?://[^:/[:space:]]+:[^@[:space:]]{10,}@'
 # credential URL: `https://<userinfo>@host`, which is the shape of a Sentry/Bugsink DSN.
 # `DSN` cannot join the key list above — the committed `env` template assigns one there, so a

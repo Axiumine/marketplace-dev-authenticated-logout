@@ -39,15 +39,6 @@ UPLOAD_DIR=/media/xxx
 # REQUIRED_ENV_VARS, so nothing failed when they were unset — every environment simply carried two
 # values that did nothing. Do not add them back: a template that lists names nothing reads teaches
 # admins to skim it, which is the one thing it cannot afford.
-# ⚠️ Development-only, and the gate is code rather than convention: the
-# `x-introspectioncode` header is honoured only when NODE_ENV is exactly `development` or `test`, and
-# refused under every other value — unset, empty, `staging`, `Production`, a typo. In production it
-# does nothing at all, and a request carrying it is answered exactly as one carrying nothing.
-# Still required at boot: unset, `${process.env.INTROSPECTION_CODE}` stringifies to the literal
-# 'undefined', so a service mislabelled as development would hand the bypass to anyone sending that
-# word. Two things have to be wrong before it opens, and this variable is the second.
-INTROSPECTION_CODE='xxx'
-
 # ⚠️ The key that opens the cookie-signing keys, not a signing key itself (ADR-034). The keys live in
 # one Redis record shared by the five services that sign or read a session cookie; this unwraps it, and
 # a service whose value is not the one the record was written under refuses to boot rather than sign

@@ -84,8 +84,7 @@ describe('checkRequiredEnv', () => {
 			'REDIS_DB3_PORT',
 			'REDIS_USERNAME',
 			'REDIS_PASSWORD',
-			'REDIS_KEY',
-			'INTROSPECTION_CODE'
+			'REDIS_KEY'
 		])
 	})
 
@@ -96,21 +95,6 @@ describe('checkRequiredEnv', () => {
 
 	it('throws naming the first missing variable', () => {
 		expect(() => checkRequiredEnv({})).toThrow(`Missing required environment variable: ${REQUIRED_ENV_VARS[0]}`)
-	})
-
-	/*
-	 * Named as a literal, because the two tests above cannot see WHICH names the list carries: the
-	 * first builds its passing environment out of the list itself, so a corrupted entry is satisfied
-	 * by the very stub the corruption produced, and the second only ever reads REQUIRED_ENV_VARS[0].
-	 *
-	 * It matters more here than in the authorization services. This handler consults the code when
-	 * there is no cookie and no Authorization header at all, so with the variable unset — and
-	 * `${process.env.INTROSPECTION_CODE}` stringifying that to 'undefined' — a caller sending the
-	 * literal string `undefined` skips the session lookup and reaches the resolver as a trusted
-	 * internal caller. No MONGODB_URI assertion: this service connects Redis only.
-	 */
-	it('requires INTROSPECTION_CODE by name', () => {
-		expect(REQUIRED_ENV_VARS).toContain('INTROSPECTION_CODE')
 	})
 
 	/*

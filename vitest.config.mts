@@ -46,8 +46,7 @@ export default defineConfig({
 					// process.env keys, so these win over whatever the local `.env` holds.
 					env: {
 						NODE_ENV: 'test',
-						REDIS_KEY: 'test:',
-						INTROSPECTION_CODE: 'test-introspection-code'
+						REDIS_KEY: 'test:'
 					}
 				}
 			},
@@ -59,8 +58,7 @@ export default defineConfig({
 					include: ['test/integration/*.itest.mts'],
 					server: { deps: { inline: inlineDeps } },
 					// Redis connection params (hosts/user/password/cluster flag) come from .env; the overrides
-					// below are pinned: per-service keyspace, ephemeral port, and the known introspection code
-					// used to bypass the token check in tests.
+					// below are pinned: per-service keyspace and ephemeral port.
 					//
 					// REDIS_KEY carries the service name as a third segment so all seven services' integration
 					// suites can run at the same time. They used to share `marketplaceDev:itest:`, which meant a
@@ -78,7 +76,6 @@ export default defineConfig({
 						// namespace from a different process, and a prefix typed twice is a prefix that can be
 						// edited once.
 						REDIS_KEY: ITEST_REDIS_KEY,
-						INTROSPECTION_CODE: 'test-introspection-code',
 						PORT: '0'
 					},
 					fileParallelism: false,
