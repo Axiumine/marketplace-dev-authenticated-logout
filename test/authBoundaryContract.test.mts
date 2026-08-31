@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * carried by a `// AB-xx:` comment above the test that proves it, and the assertion below is that none of
  * them is missing — which is the check nobody could run before, because the list existed nowhere.
  *
- * Three of the eleven cases are not this service's to answer, and the contract says so in writing rather
+ * Three of the seven cases are not this service's to answer, and the contract says so in writing rather
  * than here: it serves all three tiers (ADR-005), so it asserts no tier and has no wrong one to refuse, and
  * it mints nothing, so it has no rotation to replay.
  *

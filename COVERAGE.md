@@ -132,30 +132,25 @@ throw fails only that test. See the comments in `test/logout.test.mts` (`describ
 and `test/schema.test.mts` (`describe('QueriesApi')`) for the mechanics.
 
 Everything — the Koa auth middleware, the resolvers, the DB teardown, and now the module-load
-GraphQL declarations — is fully mutated. Current state: **104 mutants, 104 killed, 0 survived**,
-~35 s.
+GraphQL declarations — is fully mutated. Current state: **every tested mutant killed, 0 survived**,
+score 100.00, ~35 s. The instrumented total moves with the source, so read it off the run rather
+than from here.
 
 ### Equivalent mutants
 
-**Three** `// Stryker disable next-line` comments live in `src/`, and between them they suppress
-**six** mutants — the two numbers are not the same, which is what an earlier revision of this section
-got wrong by claiming four of each. One comment names two mutator types
-(`ConditionalExpression,StringLiteral`) on a multi-line guard, and that one line alone accounts for
-four of the six. Reconcile against the report, not against the comment count:
-`grep -o '"status":"Ignored"' reports/mutation/mutation.html | wc -l`.
+**One** `// Stryker disable next-line` comment lives in `src/`. A comment and a mutant are not the
+same unit — one comment can name several mutator types and suppress several mutants at once — so
+reconcile against the report rather than against the comment count:
+`grep -o '"status":"Ignored"' reports/mutation/mutation.html | wc -l`. The score is computed over the
+tested mutants only; ignored ones are excluded from the denominator, which is why a run can report
+100.00 with a smaller killed count than its instrumented total.
 
-Current run: **110 instrumented · 104 killed · 6 ignored · 0 survived · score 100.00**. The score is
-computed over the 104 tested mutants; ignored ones are excluded from the denominator, which is why
-104/104 and 100.00 agree while 110 is the instrumented total.
+The comment carries its reachability argument:
 
-Each comment carries its reachability argument:
-
-- `authorizationLogoutHandler.mts` — the `?.` and the `typeof ctx.request.header !== 'undefined'`
-  guard in the **authorization** block. Both exits of the cookie block above require
-  `ctx.request.header` to be defined, so neither guard can ever fire. They are kept for symmetry
-  with the cookie block, where the same guard is live.
-- `mutations/logout.mts` — the `?.` in `ctx.state.user?.accessToken`. The `del` on the line above
-  already dereferenced `ctx.state.user`, so an undefined user has thrown into the `catch` by then.
+- `authorizationLogoutHandler.mts` — the `?.` in the **authorization** block's
+  `ctx.request.header?.authorization`. The cookie block above has one exit that does not throw, and
+  it requires `ctx.request.header` to be defined, so the guard can never fire. It is kept for
+  symmetry with the cookie block, where the same read is live.
 
 Do not add to this list without the same kind of argument. "I could not think of a test" is not
 an equivalence proof.

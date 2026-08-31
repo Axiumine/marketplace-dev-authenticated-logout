@@ -17,7 +17,6 @@ import { ITEST_KEYGRIP_KEYS } from '../../vitest.keygrip.mts'
 import { ACCESS_SESSION, asHash, REFRESH_SESSION, refreshSessionWithoutIdentity } from '../helpers/sessionFixtures.mts'
 
 const REDIS_KEY = process.env.REDIS_KEY as string
-const INTROSPECTION_CODE = process.env.INTROSPECTION_CODE as string
 // Must match the server's cookie signer exactly (see createServer): same keys, same SHA-512.
 const keys = new Keygrip(
 	ITEST_KEYGRIP_KEYS.map((key) => key.material),
@@ -304,8 +303,8 @@ describe('logout service (integration, real Redis cluster)', () => {
 	/*
 	 * The guard's other side, and it IS reachable over real HTTP: an Authorization header can carry
 	 * an explicit empty value. `authorization: ''` arrives as the defined empty string — distinct
-	 * from the header being absent, which is what the introspection fallback above actually guards
-	 * against. `.replace('Bearer ', '')` on `''` still returns `''`, so `accessToken !== ''` is
+	 * from the header being absent, which the guard above refuses outright.
+	 * `.replace('Bearer ', '')` on `''` still returns `''`, so `accessToken !== ''` is
 	 * false and the access-token lookup is skipped outright; the refresh half of logout still runs.
 	 */
 	it('skips the access-token lookup outright when the Authorization header is present but empty', async () => {
@@ -319,8 +318,8 @@ describe('logout service (integration, real Redis cluster)', () => {
 		expect(await redisClient.exists(refreshKey)).toBe(0)
 	})
 
-	// No cookie header at all, and no introspection code to excuse it: the first guard in
-	// authorizationLogoutHandler refuses before Redis is ever touched.
+	// No cookie header at all: the first guard in authorizationLogoutHandler refuses before Redis is
+	// ever touched.
 	it('rejects a request with no cookie header at all', async () => {
 		const res = await callLogout({ authorization: 'Bearer access:xyz' })
 
@@ -339,39 +338,6 @@ describe('logout service (integration, real Redis cluster)', () => {
 		const json = (await res.json()) as { message?: string; description?: string }
 		expect(json.message).toBe('Precondition Failed')
 		expect(json.description).toBe('No authorization header.')
-	})
-
-	/*
-	 * The introspection bypass and the resolver, now agreeing about what they are doing.
-	 *
-	 * With a valid x-introspectioncode and neither cookie nor Authorization header, the handler takes its
-	 * `introspection` exit and never assigns `ctx.state`. The resolver sees no session on its context and
-	 * returns `true` without touching Redis or the cookie — which is what this test asserts, and what it
-	 * asserted beforehand too: the observable behaviour did not change.
-	 *
-	 * What changed is how it was reached. The resolver's first statement used to dereference
-	 * `ctx.state.user.refreshToken` on an undefined user, and the `true` the caller received was a TypeError
-	 * raised inside the resolver's own try and swallowed by `catch { Sentry.captureException(e) }` — every
-	 * such call filed a Sentry event describing a session teardown that was never attempted. This is still
-	 * the only path that reaches this outcome with real infrastructure, and no Redis failure is simulated.
-	 */
-	it('answers true without deleting anything when the introspection code replaces the session', async () => {
-		const refresh = randomUUID()
-		const refreshKey = sessionKey(`refresh:${refresh}`)
-		seededKeys.push(refreshKey)
-		await seedRefreshSession(refreshKey)
-
-		const res = await callLogout({ 'x-introspectioncode': INTROSPECTION_CODE })
-
-		expect(res.status).toBe(200)
-		const json = (await res.json()) as { data?: { logout?: boolean }; errors?: unknown }
-		expect(json.errors).toBeUndefined()
-		expect(json.data?.logout).toBe(true)
-
-		// Nothing was consumed: the "success" is the swallowed TypeError, not a logout.
-		expect(await redisClient.exists(refreshKey)).toBe(1)
-		// …and no cookie was cleared either, because ctx.cookies.set never ran.
-		expect(res.headers.getSetCookie().find((cookie) => cookie.startsWith('refresh_token='))).toBeUndefined()
 	})
 
 	// verifySignedRefreshToken (called before any Redis lookup) rejects a refresh cookie whose
@@ -432,8 +398,18 @@ describe('logout service (integration, real Redis cluster)', () => {
 		expect(await redisClient.exists(accessKey)).toBe(1)
 	})
 
-	it('serves /health when the introspection code bypasses auth', async () => {
-		const res = await fetch(`${base}/health`, { headers: { 'x-introspectioncode': INTROSPECTION_CODE } })
+	// The auth middleware is mounted app-wide and runs before the dispatch, so /health needs the same
+	// pair of credentials the GraphQL endpoint does — a signed refresh cookie whose session is on the
+	// cluster, and an Authorization header.
+	it('serves /health to a caller carrying a real session', async () => {
+		const refresh = randomUUID()
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+		seededKeys.push(refreshKey)
+		await seedRefreshSession(refreshKey)
+
+		const res = await fetch(`${base}/health`, {
+			headers: { cookie: signedCookie(refresh), authorization: 'Bearer access:xyz' }
+		})
 
 		expect(res.status).toBe(200)
 		const json = (await res.json()) as { status: string; timestamp: string }
@@ -441,7 +417,14 @@ describe('logout service (integration, real Redis cluster)', () => {
 	})
 
 	it('falls through to 404 for an unknown path', async () => {
-		const res = await fetch(`${base}/nope`, { headers: { 'x-introspectioncode': INTROSPECTION_CODE } })
+		const refresh = randomUUID()
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+		seededKeys.push(refreshKey)
+		await seedRefreshSession(refreshKey)
+
+		const res = await fetch(`${base}/nope`, {
+			headers: { cookie: signedCookie(refresh), authorization: 'Bearer access:xyz' }
+		})
 
 		expect(res.status).toBe(404)
 	})

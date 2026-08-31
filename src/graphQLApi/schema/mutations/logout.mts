@@ -10,35 +10,17 @@ import { GraphQLBoolean, GraphQLNonNull } from 'graphql'
 dotenv.config()
 
 /*
- * ⚠️ **What reaches this resolver is not an `IContextLogout`, and this file used to pretend it was.**
- * `IContextLogout` declares `state.user` as always present. Apollo hands the resolver the raw Koa `ctx`
- * (`src/index.mts:171-178`), and `authorizationLogoutHandler` fills `state.user` on the authenticated path
- * only: a request admitted by the `x-introspectioncode` bypass skips that whole block and arrives here with
- * `ctx.state` still Koa's empty default. The declared type made the absent case unrepresentable, so the code
- * that handled it anyway — `ctx.state.user?.accessToken` — sat *after* a dereference of the same object that
- * had already thrown. Unreachable by construction, therefore unkillable, therefore carried by a Stryker
- * exclusion instead of by a test. Widening the type is what deletes the exclusion: `user` is optional here
- * because it genuinely is, and the one branch that reads it is now an ordinary tested branch.
- *
- * `IContextLogout` lives in `@axiumine/koa-utils`, published and shared with services whose middleware does
- * always fill `state.user` — the narrowing is correct there and wrong only here, which is why this widening
- * is local rather than a change to that package.
+ * ⚠️ **`state.user` is always here, and `IContextLogout` says so.** Apollo hands the resolver the raw Koa
+ * `ctx` (`src/index.mts:171-178`), and the only way to this line is through `authorizationLogoutHandler`,
+ * which either fills `state.user` from a session it found in Redis or throws before any resolver runs.
+ * The file once carried a locally widened `user?:` context type for a request that arrived authenticated by
+ * nothing; no such request exists.
  */
-export type IContextLogoutResolver = Omit<IContextLogout, 'state'> & {
-	state: { user?: IContextLogout['state']['user'] }
-}
-
 export const logout = {
 	description: 'logout',
 	type: new GraphQLNonNull(GraphQLBoolean),
-	async resolve(_: unknown, {}, ctx: IContextLogoutResolver) {
+	async resolve(_: unknown, {}, ctx: IContextLogout) {
 		const user = ctx.state.user
-		// No session on the context means the introspection bypass let this call in without authenticating it,
-		// so there is nothing to end and no cookie of ours to clear. The answer is the `true` this mutation
-		// has always given such a call — it used to arrive via a TypeError reported to Sentry on the way.
-		if (user === undefined) {
-			return true
-		}
 
 		try {
 			// Read before the delete, because the delete is what makes it unreadable: the session hash is the

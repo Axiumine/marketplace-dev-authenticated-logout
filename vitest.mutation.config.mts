@@ -29,8 +29,7 @@ export default defineConfig({
 		// which does not override keys already present in process.env.
 		env: {
 			NODE_ENV: 'test',
-			REDIS_KEY: 'test:',
-			INTROSPECTION_CODE: 'test-introspection-code'
+			REDIS_KEY: 'test:'
 		}
 	}
 })
