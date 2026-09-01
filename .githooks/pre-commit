@@ -4,7 +4,7 @@
 # Installed as a per-repo copy (not a symlink: nothing else can move out from
 # under it). Five independent checks, cheapest first — check 0 reads the
 # working tree, checks 1-4 the staged index:
-#   0. a working-tree env value is split across two lines -> block
+#   0. a working-tree env line the parsers here disagree on -> block
 #   1. staged PATH looks like a secret file             -> block
 #   2. staged ADDED LINES contain a high-entropy secret -> block
 #   3. eslint or prettier is not clean                  -> block  (see below)
@@ -34,6 +34,15 @@ fail=0
 # — so the "quote anything with whitespace" convention (RISK_REGISTER R05) is
 # not enough and this runs as a gate instead. R05b.
 #
+# The second half of the check is R05 itself: a value left UNQUOTED. Measured
+# on this platform rather than assumed — `KEY=abc def` is `abc def` to dotenv
+# 17.4.2 and an `invalid line` to direnv 2.32.1, which then exports none of the
+# shared layer; `KEY=abc#tail` is `abc` to both, silently, because each reads
+# the `#` as the start of a comment. One file, two readers, two answers, and
+# the truncating one says nothing. A pair of quotes settles every case, so an
+# unquoted value holding whitespace or a `#` is blocked here instead of being
+# left to a convention that has now been broken twice.
+#
 # It reads the working tree, not the index, because the file it most needs to
 # see is git-ignored and never staged. Line numbers and key names only: no
 # value is ever printed, per .claude/SECRETS.md.
@@ -53,26 +62,41 @@ env_shape_ok() {
 			continue
 		fi
 		val="${trimmed#*=}"
+		# Trailing whitespace only: both readers drop it, so there is nothing to
+		# disagree about and flagging it would be a false positive on a stray space.
+		val="${val%"${val##*[![:space:]]}"}"
 		q="${val:0:1}"
 		if [ "$q" = '"' ] || [ "$q" = "'" ]; then
 			if [ "${#val}" -lt 2 ] || [ "${val: -1}" != "$q" ]; then
 				echo "pre-commit: $f:$n — ${trimmed%%=*} opens a $q quote that never closes on this line." >&2
 				bad=1
 			fi
+		elif [ -n "$val" ]; then
+			case "$val" in
+			*'#'*)
+				echo "pre-commit: $f:$n — ${trimmed%%=*} is unquoted and holds a #, which both readers cut the value at." >&2
+				bad=1
+				;;
+			*[[:space:]]*)
+				echo "pre-commit: $f:$n — ${trimmed%%=*} is unquoted and holds whitespace, which direnv refuses outright." >&2
+				bad=1
+				;;
+			esac
 		fi
 	done < "$f"
 	return "$bad"
 }
 
 env_shape_fail=0
-for envfile in .env .env.* env; do
+for envfile in .env .env.* env env.shared; do
 	[ -f "$envfile" ] || continue
 	env_shape_ok "$envfile" || env_shape_fail=1
 done
 if [ "$env_shape_fail" -ne 0 ]; then
-	echo 'pre-commit: aborted — an env value is split across two lines. dotenv silently truncates it and turns the' >&2
-	echo '            orphan tail into a junk variable. Rejoin the value onto one line; no value was printed here.' >&2
-	echo '            Why this is a gate and not a convention: docs/workflow.md §Environment files, R05b.' >&2
+	echo 'pre-commit: aborted — an env line above is not read the same way by every reader on this platform. A' >&2
+	echo '            split value truncates and leaves a junk variable behind (R05b); an unquoted value holding' >&2
+	echo '            whitespace or a # is refused by direnv or cut short by dotenv (R05). Rejoin it or quote it;' >&2
+	echo '            no value was printed here. Why a gate: docs/workflow.md §Environment files.' >&2
 	exit 1
 fi
 
