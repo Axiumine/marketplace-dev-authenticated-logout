@@ -4,6 +4,8 @@ import { koaMiddleware as apolloServerKoa } from '@as-integrations/koa'
 import { redisClient, RedisConnect } from '@axiumine/koa-utils/dataSources/Redis'
 import { IContextLogout } from '@axiumine/koa-utils/graphQL/schema/context/IContextLogout'
 import { tdwKoaErrorHandler } from '@axiumine/koa-utils/koa/tdwKoaErrorHandler'
+import type { EnvShape } from '@axiumine/marketplace-common/others/assertEnvShape'
+import { assertEnvShape } from '@axiumine/marketplace-common/others/assertEnvShape'
 import { IKeygripKeyMaterial } from '@axiumine/marketplace-common/others/IKeygripKeyMaterial'
 import { loadKeygrip } from '@axiumine/marketplace-common/others/loadKeygrip'
 import { watchKeygrip } from '@axiumine/marketplace-common/others/watchKeygrip'
@@ -55,6 +57,42 @@ export const REQUIRED_ENV_VARS = [
 ]
 
 /**
+ * The *kind* of value each name must hold, checked by `assertEnvShape` after the presence loop above.
+ * Presence and shape are two passes on purpose: a name may be shaped without being required, which is
+ * what lets `REDIS_URL` appear here and in no list.
+ *
+ * ⚠️ **A name absent from this map is unconstrained, and several are deliberately absent.**
+ * `REDIS_USERNAME` and `REDIS_PASSWORD` are free strings — a credential has no format, and a rule
+ * invented for one would refuse a legal password. `KEYGRIP_KEK` is left out because its length rule
+ * belongs to `readKek`, the single decode site: a second spelling of it here is the drift that comment
+ * exists to prevent.
+ *
+ * What this catches is an environment filled in from somewhere else — a Mongo URI in the Redis slot,
+ * `true` where koa-utils compares against `'1'`, a host name carrying a scheme, a port with a typo in
+ * it. All four are truthy, so the loop above passes every one of them. A plausible wrong value of the
+ * right shape still passes and always will, because no check this process runs knows what the rest of
+ * the fleet was pointed at: that residual is the open half of `RISK_REGISTER` R04.
+ */
+export const ENV_SHAPES: Readonly<Record<string, EnvShape>> = {
+	PORT: 'port',
+	REDIS_IS_CLUSTER: 'flag01',
+	/*
+	 * ⚠️ Shaped here and required nowhere. Its presence rule is the conditional at the foot of
+	 * `checkRequiredEnv`, because the cluster branch never reads it and the committed `env` template ships
+	 * it empty — a shape pass that also demanded presence would refuse the very machines this workspace
+	 * ships configured. `assertEnvShape` skips an absent or empty value for exactly this case.
+	 */
+	REDIS_URL: 'redisUrl',
+	REDIS_DB1_HOST: 'hostname',
+	REDIS_DB2_HOST: 'hostname',
+	REDIS_DB3_HOST: 'hostname',
+	REDIS_DB1_PORT: 'port',
+	REDIS_DB2_PORT: 'port',
+	REDIS_DB3_PORT: 'port',
+	REDIS_KEY: 'keyPrefix'
+}
+
+/**
  * Fail fast if any required environment variable is missing.
  */
 export function checkRequiredEnv(env: NodeJS.ProcessEnv = process.env): void {
@@ -78,6 +116,13 @@ export function checkRequiredEnv(env: NodeJS.ProcessEnv = process.env): void {
 	 * (`RISK_REGISTER` R04). `SETUP.md` puts a fresh machine on precisely that branch.
 	 */
 	if (env.REDIS_IS_CLUSTER !== '1' && !env.REDIS_URL) throw new Error('Missing required environment variable: REDIS_URL')
+
+	/*
+	 * Shape last, and only once every name that must be present is. A value that is absent is a
+	 * different fault from a value that is the wrong kind of thing, and reporting the second while the
+	 * first is outstanding sends an admin to fix a variable they have not written yet.
+	 */
+	assertEnvShape(ENV_SHAPES, env)
 }
 
 /**
