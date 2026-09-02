@@ -43,6 +43,17 @@ fail=0
 # unquoted value holding whitespace or a `#` is blocked here instead of being
 # left to a convention that has now been broken twice.
 #
+# Measured again 2026-09-02, and the split half needed correcting too. dotenv
+# 17.4.2 does not truncate a wrap inside quotes: it keeps both physical lines
+# as one newline-bearing value, silently wrong rather than short. It truncates
+# an unquoted wrap at the newline, and the orphan tail becomes a variable only
+# when the tail carries an `=` - which base64 padding supplies. direnv 2.32.1
+# refuses a wrap of any kind, quoted or not, and exports nothing at all from
+# that file. So a tail like `kJ3xQ==` is a legal KEY=VALUE line to both readers
+# and used to pass here. Two rules close it, and neither costs a false positive
+# on the 706 keys that exist today: the key must be SCREAMING_SNAKE_CASE, and an
+# unquoted value may not open with the `=` that base64 padding leaves behind.
+#
 # It reads the working tree, not the index, because the file it most needs to
 # see is git-ignored and never staged. Line numbers and key names only: no
 # value is ever printed, per .claude/SECRETS.md.
@@ -56,8 +67,8 @@ env_shape_ok() {
 		n=$((n + 1))
 		trimmed="${line#"${line%%[![:space:]]*}"}"
 		case "$trimmed" in '' | '#'*) continue ;; esac
-		if [[ ! $trimmed =~ ^[A-Za-z_][A-Za-z_0-9]*= ]]; then
-			echo "pre-commit: $f:$n is not a KEY=VALUE line — the value above it is cut in two." >&2
+		if [[ ! $trimmed =~ ^[A-Z][A-Z0-9_]*= ]]; then
+			echo "pre-commit: $f:$n is not a SCREAMING_SNAKE KEY=VALUE line — the value above it is cut in two." >&2
 			bad=1
 			continue
 		fi
@@ -73,6 +84,10 @@ env_shape_ok() {
 			fi
 		elif [ -n "$val" ]; then
 			case "$val" in
+			'='*)
+				echo "pre-commit: $f:$n — ${trimmed%%=*} opens its value with =, which is what base64 padding leaves on the tail of a split value." >&2
+				bad=1
+				;;
 			*'#'*)
 				echo "pre-commit: $f:$n — ${trimmed%%=*} is unquoted and holds a #, which both readers cut the value at." >&2
 				bad=1
@@ -95,7 +110,8 @@ done
 if [ "$env_shape_fail" -ne 0 ]; then
 	echo 'pre-commit: aborted — an env line above is not read the same way by every reader on this platform. A' >&2
 	echo '            split value truncates and leaves a junk variable behind (R05b); an unquoted value holding' >&2
-	echo '            whitespace or a # is refused by direnv or cut short by dotenv (R05). Rejoin it or quote it;' >&2
+	echo '            whitespace or a # is refused by direnv or cut short by dotenv (R05); a tail that reads as its' >&2
+	echo '            own KEY=VALUE line is still a tail (R05b). Rejoin it or quote it;' >&2
 	echo '            no value was printed here. Why a gate: docs/workflow.md §Environment files.' >&2
 	exit 1
 fi
