@@ -1,0 +1,3 @@
+import { ItemCategory as Categories } from '@axiumine/marketplace-common/models/MongoDB/ItemCategory'
+
+export const drop = async (id: string) => Categories.deleteOne({ _id: id })

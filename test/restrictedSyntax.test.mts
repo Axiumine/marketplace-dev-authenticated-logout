@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 
 import { ESLint } from 'eslint'
 import { describe, expect, it } from 'vitest'
@@ -138,5 +138,86 @@ describe('the block stays silent on the shape the services carry', () => {
 
 		expect(messages).toHaveLength(1)
 		expect(messages[0]?.message).toContain(expected)
+	})
+})
+
+const ITEM_CATEGORY_MESSAGE = 'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource'
+const ITEM_CATEGORY_ALIAS_MESSAGE = 'ADR-012: import the itemCategory model under its own name.'
+
+/*
+ * ADR-012, and RISK_REGISTER R19.
+ *
+ * The category tree is capped at two levels by a resolver rather than by the collection's `$jsonSchema`,
+ * because a validator cannot read the parent document to learn how deep the one in front of it sits. The
+ * cap therefore holds for exactly as long as every write to `itemCategory` goes through the Admin tier's
+ * four functions, and until this block existed nothing structural said so.
+ *
+ * Three shapes, because two of them are the same write spelled differently and the third renames the
+ * model out of the first two's reach: `ItemCategory.updateOne(...)`, `ItemCategory['updateOne'](...)`,
+ * and `import { ItemCategory as Categories }`. The fourth case is the one that must stay silent — a
+ * count, which is what this tier actually does with the collection.
+ */
+describe('the itemCategory write ban fires on every shape it names', () => {
+	it.each([
+		['item-category-write-call', ITEM_CATEGORY_MESSAGE],
+		['item-category-write-computed', ITEM_CATEGORY_MESSAGE],
+		['item-category-write-alias', ITEM_CATEGORY_ALIAS_MESSAGE]
+	])('reports %s exactly once', async (fixture, expected) => {
+		const messages = await lintFixture(fixture)
+
+		expect(messages).toHaveLength(1)
+		expect(messages[0]?.message).toContain(expected)
+		expect(messages[0]?.severity).toBe(2)
+	})
+
+	it('reports nothing on a read, which is all this tier does with the collection', async () => {
+		expect(await lintFixture('item-category-compliant')).toStrictEqual([])
+	})
+})
+
+const SRC = new URL('../src/', import.meta.url)
+
+/** An inline suppression is one comment, and it switches off every selector this file proves. */
+export const suppressesTheBlock = (code: string): boolean => code.includes('eslint-disable')
+
+/** Every `.mts` under `src/` carrying one, path relative to `src/`. */
+async function sourcesSuppressingTheBlock(directory = ''): Promise<string[]> {
+	const entries = await readdir(new URL(directory, SRC), { withFileTypes: true })
+	const found: string[] = []
+
+	for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+		if (entry.isDirectory()) found.push(...(await sourcesSuppressingTheBlock(`${directory}${entry.name}/`)))
+		else if (entry.name.endsWith('.mts')) {
+			if (suppressesTheBlock(await readFile(new URL(`${directory}${entry.name}`, SRC), 'utf8'))) {
+				found.push(`${directory}${entry.name}`)
+			}
+		}
+	}
+
+	return found
+}
+
+/*
+ * The backstop, without which every selector above is one comment wide.
+ *
+ * `no-restricted-syntax` is a lint rule, and a lint rule is switched off from inside the file it
+ * governs: one `// eslint-disable-next-line` and the ban that took a config block, a fixture and a test
+ * to state is gone, silently, in a diff that reads as housekeeping. No source file on this platform
+ * carries such a comment today — measured, not assumed — so the rule this asserts is the one already
+ * true: none of them may. A file that needs one is a decision worth a reviewer, which is what failing
+ * here buys.
+ *
+ * Any `eslint-disable`, not only one naming this rule: a bare `/* eslint-disable *\/` switches off
+ * everything, and a rule list is a list somebody can extend after the fact.
+ */
+describe('nothing under src/ switches the block off inline', () => {
+	it('carries no eslint-disable comment at all', async () => {
+		expect(await sourcesSuppressingTheBlock()).toStrictEqual([])
+	})
+
+	it('would notice one, in either spelling', () => {
+		expect(suppressesTheBlock('// eslint-disable-next-line no-restricted-syntax')).toBe(true)
+		expect(suppressesTheBlock('/* eslint-disable */')).toBe(true)
+		expect(suppressesTheBlock('const disabled = false')).toBe(false)
 	})
 })
