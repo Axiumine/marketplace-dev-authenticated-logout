@@ -167,6 +167,30 @@ const ITEMCATEGORY_NO_WRITE = [
 	}
 ]
 
+/*
+ * ADR-031-era convention made mechanical: an integration test seeds through the raw driver, never
+ * through a Mongoose model. RISK_REGISTER R33, docs/testing.md "Integration test conventions".
+ *
+ * A model is a second description of a collection whose first description is the `$jsonSchema`
+ * validator in `marketplace-db-setup` — `ShopOwner` once declared a bare `personalData.birth.date`
+ * and no `contacts` at all while the validator demanded both. A suite that seeds through the model
+ * then writes a document the collection would have refused, and passes: the per-repo throwaway
+ * databases carry no validator, so nothing on the way in says no. The raw driver has no opinion of
+ * its own, which is the whole point — the literal in the test is the document under test.
+ *
+ * Scoped to `test/integration/**` on purpose. Unit tests mock these models by name and must keep
+ * importing them, and `marketplace-common`'s own suite tests the models themselves.
+ */
+const INTEGRATION_SEED_NO_MODEL = {
+	patterns: [
+		{
+			group: ['@axiumine/marketplace-common/models/MongoDB/*'],
+			message:
+				'An integration test seeds through the raw driver — `mongoose.connection.db!.collection(...)` — and never through a Mongoose model. A model can diverge from the collection\'s $jsonSchema validator (ShopOwner did), so a model-shaped seed writes a document this suite never described. Testing a model belongs in marketplace-common. docs/testing.md "Integration test conventions", RISK_REGISTER R33.'
+		}
+	]
+}
+
 export default [
 	// `.stryker-tmp/**` and `reports/**` are build output, not sources. Stryker copies the whole
 	// repo into a sandbox under .stryker-tmp and only removes it on a clean exit — an interrupted
@@ -251,6 +275,15 @@ export default [
 				...ITEMCATEGORY_NO_WRITE,
 				...KEYGRIP_KEY_NO_ENV_READ
 			]
+		}
+	},
+	// The seeding convention, stated where it can fail. Nothing else in this file names
+	// `no-restricted-imports`, so this object is the whole rule for the files it matches — add to
+	// `INTEGRATION_SEED_NO_MODEL` rather than declaring the rule a second time.
+	{
+		files: ['test/integration/**/*.mts'],
+		rules: {
+			'no-restricted-imports': ['error', INTEGRATION_SEED_NO_MODEL]
 		}
 	}
 ]

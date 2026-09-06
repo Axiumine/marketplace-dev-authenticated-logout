@@ -1,0 +1,6 @@
+// The shape the rule refuses. A model is a second description of a collection, and the collection's
+// `$jsonSchema` validator is the first — seeding through the model writes whatever the model believes,
+// which is not always what the collection would accept.
+import { ShopOwner } from '@axiumine/marketplace-common/models/MongoDB/ShopOwner'
+
+await new ShopOwner({ email: 'seed@example.com' }).save()

@@ -1,0 +1,5 @@
+// The compliant shape, and the one every harness in these repos already uses: the literal in the test
+// is the document that reaches the collection, with nothing in between to reshape it.
+import mongoose from 'mongoose'
+
+await mongoose.connection.db!.collection('shopOwner').insertOne({ email: 'seed@example.com' })
