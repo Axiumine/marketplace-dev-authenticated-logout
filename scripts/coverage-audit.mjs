@@ -13,9 +13,17 @@
 //   2. A `coverage.exclude` glob. `src/gql/**` is a directory, so it exempts whatever is dropped
 //      into that directory next — silently, with the run still green. `include` cannot catch this
 //      one, which is why this script exists.
+//   3. ⚠️ An extension `coverage.include` never matched (RISK_REGISTER R56), and this is the quiet
+//      one: `include` decides BOTH sides of the comparison in 1, so a `.js` dropped into an app's
+//      `src/`, or an `.mjs` beside a service's `.mts`, is absent from the report AND absent from the
+//      list this script compares the report against. Nothing anywhere goes red. So the roots of the
+//      globs are read as well as the globs — everything before a pattern's first wildcard segment is
+//      the directory the package declared to be its source — and every tracked file under one of
+//      those roots that no glob matches has to be in coverage-exempt.txt by name.
 //
-// The rule it enforces: the set of tracked files matching `coverage.include`, minus the set of
-// files in coverage/lcov.info, must equal coverage-exempt.txt **exactly**. Both directions fail —
+// The rule it enforces: the set of tracked files under a declared source root that the report does
+// not account for — matched by `coverage.include` and absent from coverage/lcov.info, or matched by
+// no glob at all — must equal coverage-exempt.txt **exactly**. Both directions fail —
 // an unnamed exemption is a hole, and a named file that is now covered is a stale line that would
 // hide the next hole. Exemptions are exact paths, never globs: a glob here would re-create the
 // blind spot the file exists to close.
@@ -131,6 +139,20 @@ const globToRegExp = (glob) => {
 	return new RegExp(re + '$')
 }
 
+// The directory a glob declares to be source: every segment before the first one holding a wildcard.
+// `src/**/*.mts` → `src`, `lib/**/*.js` → `lib`. A pattern with no wildcard anywhere is one exact
+// file rather than a directory of them — `migrate-mongo-config.js` is one — and names no root, since
+// an exact path cannot drift.
+const globRoot = (glob) => {
+	const segments = glob.split('/')
+	const literal = []
+	for (const segment of segments) {
+		if (/[*?{]/.test(segment)) break
+		literal.push(segment)
+	}
+	return literal.length === segments.length ? null : literal.join('/')
+}
+
 const configPath = CONFIGS.find((f) => existsSync(f))
 if (!configPath) die(`no vitest config found (looked for ${CONFIGS.join(', ')})`)
 
@@ -159,6 +181,11 @@ if (gated.length === 0) {
 	die(`coverage.include (${include.join(', ')}) matches no tracked file — the globs are wrong.`)
 }
 
+// ⚠️ The files `include` cannot report on because it never reached them (R56). Read from the same
+// globs, so a root that moves takes this scan with it and cannot be forgotten separately.
+const roots = [...new Set(include.map(globRoot).filter(Boolean))]
+const drifted = tracked.filter((f) => roots.some((r) => f.startsWith(`${r}/`)) && !matchers.some((re) => re.test(f)))
+
 const reported = new Set(
 	readFileSync(lcovPath, 'utf8')
 		.split('\n')
@@ -183,20 +210,26 @@ for (const path of exempt) {
 	}
 }
 
-const missing = gated.filter((f) => !reported.has(f)).sort()
+// One set, two reasons: gated and unreported, or under a source root and gated by nothing. Both are
+// holes in the denominator, both are named in the same file, and both go stale the same way.
+const missing = [...new Set([...gated.filter((f) => !reported.has(f)), ...drifted])].sort()
 const exemptSet = new Set(exempt)
 const undeclared = missing.filter((f) => !exemptSet.has(f))
 const stale = exempt.filter((f) => !missing.includes(f)).sort()
 
 if (undeclared.length) {
+	const driftSet = new Set(drifted)
 	console.error(
-		`\n✗ coverage-audit: ${undeclared.length} tracked file(s) gated by coverage.include but absent from ${lcovPath}:`
+		`\n✗ coverage-audit: ${undeclared.length} tracked file(s) under a source root that ${lcovPath} does not account for:`
 	)
-	for (const f of undeclared) console.error(`    ${f}`)
+	for (const f of undeclared) {
+		console.error(`    ${f}${driftSet.has(f) ? '   ← no coverage.include glob matches it' : ''}`)
+	}
 	console.error(
 		'\n  A file that is not in the report is not in the denominator, so the 100% threshold said',
-		`\n  nothing about it. Either give it a test, or name it in ${EXEMPT_FILE} with the reason`,
-		'\n  it can never have one. Do not widen a coverage.exclude glob to make this pass.'
+		'\n  nothing about it. Either give it a test — adding its extension to coverage.include if that',
+		`\n  is what it is missing — or name it in ${EXEMPT_FILE} with the reason it can never have one.`,
+		'\n  Do not widen a coverage.exclude glob, and do not shorten a source root, to make this pass.'
 	)
 	process.exitCode = 1
 }
@@ -211,6 +244,6 @@ if (stale.length) {
 if (!process.exitCode) {
 	console.log(
 		`✓ coverage-audit: ${gated.length} tracked source file(s) gated, ${reported.size} in the report, ` +
-			`${exempt.length} exempt by name.`
+			`${exempt.length} exempt by name, ${drifted.length} under ${roots.length} source root(s) with no glob.`
 	)
 }
