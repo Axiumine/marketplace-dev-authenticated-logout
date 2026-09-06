@@ -26,9 +26,18 @@ export default defineConfig({
 		server: { deps: { inline: inlineDeps } },
 		coverage: {
 			provider: 'v8',
-			all: true,
+			// ⚠️ `include` is what makes the thresholds below mean anything, and it is not
+			// optional. Without it the v8 provider reports only the files a test actually imported:
+			// a source file no suite ever loads is ABSENT from the report rather than listed at 0%,
+			// so a 100% gate passes over it (RISK_REGISTER R07). The glob names every shipped source
+			// file, so a new one is force-listed at 0% and takes the run red until it has a test.
+			//
+			// ⚠️ `all: true` and `extension: ['.mts']` used to sit either side of this line and did
+			// nothing at all. vitest 4 removed both from CoverageOptions, no runtime path reads them,
+			// and an unchecked spread swallowed them without a warning — so the safety net a reader
+			// took them for was never there. Do not bring either back: a non-null `include` is the
+			// entire mechanism, and `all` is not a synonym for it.
 			include: ['src/**/*.mts'],
-			extension: ['.mts'],
 			reporter: ['text', 'text-summary', 'html', 'lcov'],
 			// 100% on every metric. If a run drops below, add tests or delete dead code until it
 			// returns to 100% — never lower these numbers. See COVERAGE.md.
