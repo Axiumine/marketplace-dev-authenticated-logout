@@ -1,0 +1,11 @@
+// The two compliant spellings this platform uses: one key per call, and a batch of single-key calls under
+// `Promise.all`. Nothing here may be reported — a rule that also refused these would be reverted within a
+// day, and the convention would be back to being prose.
+export const revokeFamily = async (redisClient, members, key) => {
+	await Promise.all(members.map((member) => redisClient.del(member)))
+	await redisClient.del(key)
+}
+
+export const retirePair = async (redisClient, keyAccess, keyRefresh) => {
+	await Promise.all([redisClient.del(keyAccess), redisClient.del(keyRefresh)])
+}
