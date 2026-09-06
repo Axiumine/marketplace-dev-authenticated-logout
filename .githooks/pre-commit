@@ -15,7 +15,37 @@
 # (`KEY=test-…`) is dropped before the value scan. Override a verified false
 # positive with:
 #   git commit --no-verify
+# Before any of them, one guard that is about the commit rather than its
+# content: `main` is not a branch to commit onto (BCON-06, R35).
 set -uo pipefail
+
+# ---------------------------------------------------------------------------
+# The branch, before anything else. BCON-06, RISK_REGISTER R35.
+#
+# `main` is the checked-out branch in all sixteen repos by default, and every
+# rule on this platform says to branch before the first edit of any task.
+# Nothing downstream caught the mistake until this block existed: a commit that
+# lands on `main` passes every gate here, and untangling it afterwards is the
+# one operation a shallow history makes expensive.
+#
+# It cannot fire on an ordinary merge. Git runs this hook for `git commit`
+# only, so an automatic `--no-ff` merge commit never reaches it; the one merge
+# that does is a conflicted one finished by hand, and `MERGE_HEAD` exists at
+# exactly that moment. A detached HEAD — what `git submodule update` leaves
+# behind — has no symbolic ref, so it is not this check's business either.
+#
+# The escape hatch is named rather than `--no-verify`, which would drop the
+# secret guard below along with it. The first commit of a brand-new repo needs
+# it, `git init` having started on `main` with nowhere else to be:
+#   SKIP_MAIN_GUARD=1 git commit
+if [ "$(git symbolic-ref --short HEAD 2> /dev/null || true)" = 'main' ] &&
+	[ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ] &&
+	[ -z "${SKIP_MAIN_GUARD:-}" ]; then
+	printf '\n  ✗ pre-commit: this commit would land on `main`.\n'
+	printf '    Branch first:               git switch -c <type>/<slug>\n'
+	printf '    Deliberate commit on main:  SKIP_MAIN_GUARD=1 git commit\n\n'
+	exit 1
+fi
 
 fail=0
 
