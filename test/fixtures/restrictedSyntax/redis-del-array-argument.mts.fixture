@@ -1,0 +1,5 @@
+// `@redis/client` declares `del(keys: RedisArgument | Array<RedisArgument>)`, so the array form type-checks
+// and reads like a batch the client will take care of. It is the same multi-key DEL as the one above.
+export const revoke = async (redisClient, keyAccess, keyRefresh) => {
+	await redisClient.del([keyAccess, keyRefresh])
+}

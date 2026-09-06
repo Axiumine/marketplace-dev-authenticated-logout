@@ -1,0 +1,6 @@
+// The batched form every non-cluster Redis codebase writes out of habit. Two session keys are two
+// hashed tokens, so they land in two slots, and `DEL k1 k2` across slots is a CROSSSLOT error at
+// runtime — on the path that revokes a session.
+export const revoke = async (redisClient, keyAccess, keyRefresh) => {
+	await redisClient.del(keyAccess, keyRefresh)
+}
