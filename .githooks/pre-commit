@@ -304,9 +304,15 @@ fi
 # gated here, which is how eight commits widening the eslint `ignores` block each
 # ran no gate at all — the change that most needed checking was the one that
 # skipped every check.
+#
+# `coverage-exempt.txt` and `scripts/coverage-audit.mjs` join them for the same
+# reason. The gate that proves every source file is actually in the coverage
+# report reads one and is the other, so a commit that adds an exemption — the
+# single edit that can widen the hole this gate exists to close — would
+# otherwise be the commit that ran no gate at all.
 RELEVANT_PATHS='^(src/|test/|semgrep/|\.githooks/|package\.json$|yarn\.lock$|qodana\.(yaml|sh)$'
 RELEVANT_PATHS+='|vitest[^/]*\.mts$|tsconfig[^/]*\.json$|stryker\.config\.mjs$'
-RELEVANT_PATHS+='|eslint\.config\.js$|\.prettier(rc|ignore)$)'
+RELEVANT_PATHS+='|eslint\.config\.js$|\.prettier(rc|ignore)$|coverage-exempt\.txt$|scripts/coverage-audit\.mjs$)'
 
 # Same reasoning as the secret guard's list above: unguarded, a failed `git diff` is
 # indistinguishable from an empty one, and the empty one is the branch that exits 0 having

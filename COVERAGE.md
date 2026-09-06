@@ -37,6 +37,7 @@ red means the work is not done, not that the number is wrong.
 | Layer | File | What it does |
 |---|---|---|
 | Local test run | `vitest.config.mts` → `test.coverage.thresholds` | `yarn test:cov` exits non-zero if any metric < 100% |
+| Coverage file audit | `scripts/coverage-audit.mjs` | the same `yarn test:cov` exits non-zero if a source file `coverage.include` gates is absent from the report and unnamed |
 | Local mutation run | `stryker.config.mjs` → `thresholds.break` | `yarn test:mutation` exits non-zero if the score < 100 |
 | Qodana scan gate | `qodana.yaml` → `failureConditions.testCoverageThresholds` (`total`/`fresh` = 100) | `./qodana.sh` fails the scan if coverage < 100% |
 | Git `pre-commit` | `.githooks/pre-commit` | blocks the commit if `yarn test:cov` **or** the Qodana scan fails |
@@ -56,6 +57,20 @@ run red until it has a test. `all: true` and `extension: ['.mts']` sat either si
 of it until 2026-09-06 and did nothing at all: vitest 4 removed both from
 `CoverageOptions`, and an unchecked spread swallowed them without a warning. Do not
 bring either back — `all` is not a synonym for `include`.
+
+⚠️ **A percentage is only as good as its denominator, and
+`scripts/coverage-audit.mjs` is what checks the denominator.** `yarn test:cov` runs
+it straight after vitest: it takes every git-tracked file `coverage.include` gates,
+subtracts the files `coverage/lcov.info` actually contains, and fails unless what
+is left matches `coverage-exempt.txt` exactly. This repo exempts nothing, so it
+ships no `coverage-exempt.txt` and any file missing from the report fails the run —
+that absence is a file the 100% threshold said nothing about (`RISK_REGISTER` R07).
+A repo that genuinely needs one adds the file, one exact path per line with the
+reason it can never be tested. Exemptions are exact paths, never globs — a glob
+would exempt the next file dropped beside the named one, in silence, with the run
+still green, which is the failure the gate exists to catch. **Never widen a
+`coverage.exclude` entry to make a red run green:** give the file a test, or name
+it with the reason it can never have one.
 
 Both hooks run the scan on purpose. `git merge --no-ff` never fires `pre-commit` —
 git runs that hook for `git commit` only — so the merge commit, the one revision

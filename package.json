@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "test:cov": "vitest run --coverage",
+    "test:cov": "vitest run --coverage && node scripts/coverage-audit.mjs",
     "test:mutation": "stryker run",
     "lint": "eslint --fix . && prettier --write .",
     "lint:check": "eslint . && prettier --check .",
