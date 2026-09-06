@@ -146,7 +146,21 @@ if [ "$env_shape_fail" -ne 0 ]; then
 	exit 1
 fi
 
-SECRET_PATH='(^|/)(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc(\.yml)?|\.netrc|\.pgpass|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json|service-account.*\.json)$|\.(pem|p12|pfx|jks)$'
+# ⚠️ Two of these are here because of RISK_REGISTER **R57**, and the first is a path rather than a
+# shape. `setup/mongodb.js` is `marketplace-db-setup`'s provisioning runbook: it holds a live database
+# credential by design and is kept out of git by one ignore line, so a deleted line or a `git add -f`
+# is the whole distance between that credential and an object database nobody can rewrite cheaply.
+# The `.key` extension came from `marketplace-nginx`'s copy of this hook, which carried it while the
+# other fifteen did not — a rule in one hook is a rule in one repo, which is the drift §8 of
+# `./scripts/audit-check.sh` now refuses for paths the way it already did for values. Neither costs
+# anything: of the 2845 tracked files in the sixteen repos, none matches either, measured.
+SECRET_PATH='(^|/)(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc(\.yml)?|\.netrc|\.pgpass|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json|service-account.*\.json)$|(^|/)setup/mongodb\.js$|\.(pem|key|p12|pfx|jks)$'
+# Anything under a `secrets/` directory, whatever it is called. `marketplace-docker-DBs/secrets/` holds
+# the replica-set keyfile, the CSFLE master key and now the generated Redis config, and the last of
+# those is a plain-text file with no extension and no telltale name. The directory is git-ignored, so
+# this rule only ever fires on a deliberate `git add -f` — which is exactly the case worth stopping.
+# Nothing in these sixteen repos tracks a path with that segment, so it can cost nothing else.
+SECRET_PATH+='|(^|/)secrets/'
 
 # Vendored secret-scanner rulesets legitimately contain example secret patterns.
 SKIP_PATH='(^|/)(semgrep/vendor|gitleaks|trufflehog|\.gitnexus)/'
