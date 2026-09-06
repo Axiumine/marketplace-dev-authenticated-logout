@@ -43,8 +43,19 @@ red means the work is not done, not that the number is wrong.
 | Git `pre-push` | `.githooks/pre-push` | blocks the push if `yarn lint:check`, `yarn test:cov`, `yarn test:mutation` **or** the Qodana scan fails |
 
 The three coverage layers read the same coverage run (vitest, v8 provider, lcov →
-`coverage/lcov.info`, `all: true` over `src/**/*.mts`). Change coverage config in
-`vitest.config.mts` only. Qodana has no mutation gate — `pre-push` is the only one.
+`coverage/lcov.info`, `coverage.include` over `src/**/*.mts`). Change coverage
+config in `vitest.config.mts` only. Qodana has no mutation gate — `pre-push` is the
+only one.
+
+⚠️ **`coverage.include` is the whole reason those thresholds mean anything.** The
+v8 provider reports only the files a test actually `import`-ed, so without it a
+source file no suite loads is *absent* from the report rather than listed at 0%,
+and 100% of a denominator that excludes it passes (`RISK_REGISTER` R07). The glob
+names every shipped source file, so a new one is force-listed at 0% and takes the
+run red until it has a test. `all: true` and `extension: ['.mts']` sat either side
+of it until 2026-09-06 and did nothing at all: vitest 4 removed both from
+`CoverageOptions`, and an unchecked spread swallowed them without a warning. Do not
+bring either back — `all` is not a synonym for `include`.
 
 Both hooks run the scan on purpose. `git merge --no-ff` never fires `pre-commit` —
 git runs that hook for `git commit` only — so the merge commit, the one revision
