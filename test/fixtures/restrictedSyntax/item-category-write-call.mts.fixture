@@ -1,0 +1,4 @@
+import { ItemCategory } from '@axiumine/marketplace-common/models/MongoDB/ItemCategory'
+
+export const reparent = async (id: string, idParent: string) =>
+	ItemCategory.updateOne({ _id: id }, { $set: { idParent } })

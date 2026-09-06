@@ -1,0 +1,4 @@
+import { ItemCategory } from '@axiumine/marketplace-common/models/MongoDB/ItemCategory'
+
+export const categoryExists = async (id: string) =>
+	(await ItemCategory.countDocuments({ _id: id, deleted: { $exists: false } })) === 1

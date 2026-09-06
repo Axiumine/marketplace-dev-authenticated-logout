@@ -85,6 +85,46 @@ const RESTRICTED_SYNTAX = [
 	}
 ]
 
+/*
+ * ADR-012, and the one thing holding the two-level category cap up.
+ *
+ * The cap is enforced in a resolver — `throwIfParentNotTopLevel`, in
+ * `marketplace-dev-admin-authenticated-resource` — and not in the collection's `$jsonSchema`, because a
+ * validator cannot read a second document to find out how deep the one in front of it sits. That is a
+ * MongoDB limit rather than a design preference, and ADR-012 accepts it. What it costs is that the cap
+ * holds exactly as long as every write to `itemCategory` goes through the four functions that call the
+ * check. A write added on any other tier is a third level with nothing to refuse it, and nothing
+ * structural noticed. RISK_REGISTER R19.
+ *
+ * Two selectors for the call rather than one: `ItemCategory.updateOne(...)` and
+ * `ItemCategory['updateOne'](...)` are the same write, and a `property.name` rule passes the second — the
+ * same `key.name` / `key.value` split the TLS selectors above already carry. A third for the import,
+ * because both call selectors are keyed on the identifier and an alias would rename the model out of
+ * their reach.
+ *
+ * ⚠️ **A write ban, not a ban.** The read verbs are absent on purpose: `throwIfItemCategoryMissing`
+ * counts, the catalogue resolvers query, and a rule refusing those would refuse the tier's own work.
+ */
+const ITEMCATEGORY_NO_WRITE = [
+	{
+		selector:
+			"CallExpression[callee.object.name='ItemCategory'][callee.property.name=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
+		message:
+			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+	},
+	{
+		selector:
+			"CallExpression[callee.object.name='ItemCategory'][callee.property.value=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
+		message:
+			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+	},
+	{
+		selector: "ImportSpecifier[imported.name='ItemCategory'][local.name!='ItemCategory']",
+		message:
+			'ADR-012: import the itemCategory model under its own name. The two selectors above are keyed on the identifier `ItemCategory`, so `import { ItemCategory as Categories }` renames the model out of their reach and the ban with it. A rename that buys nothing is refused rather than left standing as the one way through.'
+	}
+]
+
 export default [
 	// `.stryker-tmp/**` and `reports/**` are build output, not sources. Stryker copies the whole
 	// repo into a sandbox under .stryker-tmp and only removes it on a clean exit — an interrupted
@@ -153,7 +193,7 @@ export default [
 	// misses the other.
 	{
 		rules: {
-			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX]
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE]
 		}
 	},
 	// The keygrip ban rides on top of the shared entries rather than replacing them: a second config
@@ -162,7 +202,7 @@ export default [
 	{
 		files: ['src/**/*.mts'],
 		rules: {
-			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...KEYGRIP_KEY_NO_ENV_READ]
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE, ...KEYGRIP_KEY_NO_ENV_READ]
 		}
 	}
 ]
