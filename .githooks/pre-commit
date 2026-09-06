@@ -137,6 +137,14 @@ SECRET_VALUE+='|^[[:space:]]*(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_S
 # code style: KEY = "<16+ chars>" — a quoted literal, never process.env.KEY
 SECRET_VALUE+='|(QODANA_TOKEN|SOCKETLABS_SERVER_APIKEY|SOCKETLABS_SERVER_ID|REDIS_PASSWORD|NPM_TOKEN)[[:space:]]*[:=][[:space:]]*["'"'"'][^$x"'"'"'][^"'"'"']{15,}["'"'"']'
 SECRET_VALUE+='|mongodb(\+srv)?://[^:/[:space:]]+:[^@[:space:]]{10,}@'
+# A credential handed to a command line as a flag - `mongosh … -password <the value>`,
+# `mysql --password=…`. No rule above can see one: there is no `KEY=` at the start of the line, no
+# quoted assignment and no URI, which is exactly the shape RISK_REGISTER R14 was opened for. Three
+# things keep it from firing on prose: the flag has to open its own word, so `reset-password material`
+# in a comment is not a match; the value may not start with `$`, `x` or `<`, the three placeholder
+# shapes written in these repos; and it must run 12 characters or more. Costs 0 false positives
+# against every tracked file in all sixteen repos, measured before it landed.
+SECRET_VALUE+='|(^|[[:space:]])-{1,2}(password|passwd|pwd|pass)[[:space:]=]+["'"'"']?[^$x<"'"'"'[:space:]][^[:space:]"'"'"']{11,}'
 # credential URL: `https://<userinfo>@host`, which is the shape of a Sentry/Bugsink DSN.
 # `DSN` cannot join the key list above — the committed `env` template assigns one there, so a
 # key-name rule would block the template itself. What separates the two is the userinfo: the
