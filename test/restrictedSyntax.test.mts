@@ -209,6 +209,50 @@ describe('the one-key-per-del rule fires on every batched shape', () => {
 	})
 })
 
+const SEED_MESSAGE = 'An integration test seeds through the raw driver'
+
+/*
+ * RISK_REGISTER R33, and docs/testing.md "Integration test conventions".
+ *
+ * The convention — seed through the driver, never through a model — was prose, and prose is checked by
+ * nobody. `no-restricted-imports` checks it now, and the three cases below are the three things that
+ * have to be true at once: it fires inside `test/integration/**`, it stays out of the way of the unit
+ * tests one directory up, which mock these very models by name, and it says nothing about the raw-driver
+ * seed the harnesses already use. A rule proved only in the first direction is a rule that could be
+ * scoped to every file on the platform and still look correct from here.
+ *
+ * Both paths are invented names rather than real files, which is safe for this rule and not for every
+ * one: `no-restricted-imports` reads the import declaration alone, so no TypeScript program has to
+ * contain the path the way `SRC_PATH` above must.
+ */
+const ITEST_PATH = 'test/integration/restrictedImportsFixture.itest.mts'
+const UNIT_TEST_PATH = 'test/restrictedImportsFixture.mts'
+
+const lintImports = async (name: string, filePath: string) => {
+	const code = await readFile(new URL(`${name}.mts.fixture`, FIXTURES), 'utf8')
+	const [result] = await new ESLint().lintText(code, { filePath })
+
+	return (result?.messages ?? []).filter((message) => message.ruleId === 'no-restricted-imports')
+}
+
+describe('an integration test may not seed through a Mongoose model', () => {
+	it('reports the model import exactly once under test/integration/', async () => {
+		const messages = await lintImports('integration-seed-via-model', ITEST_PATH)
+
+		expect(messages).toHaveLength(1)
+		expect(messages[0]?.message).toContain(SEED_MESSAGE)
+		expect(messages[0]?.severity).toBe(2)
+	})
+
+	it('stays silent on the same import in a unit test, which mocks the model by name', async () => {
+		expect(await lintImports('integration-seed-via-model', UNIT_TEST_PATH)).toStrictEqual([])
+	})
+
+	it('stays silent on the raw-driver seed every harness here already carries', async () => {
+		expect(await lintImports('integration-seed-via-raw-driver', ITEST_PATH)).toStrictEqual([])
+	})
+})
+
 const SRC = new URL('../src/', import.meta.url)
 
 /** An inline suppression is one comment, and it switches off every selector this file proves. */
