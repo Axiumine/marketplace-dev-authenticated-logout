@@ -1,5 +1,6 @@
 {
 	"analyze": {
-		"noStats": true
+		"noStats": true,
+		"skipContextFiles": true
 	}
 }
