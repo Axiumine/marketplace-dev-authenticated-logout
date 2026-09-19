@@ -51,6 +51,9 @@ export default defineConfig({
 					name: 'unit',
 					include: ['test/*.test.mts'],
 					server: { deps: { inline: inlineDeps } },
+					// Caps how long a test's full name may be — the mutation gate selects tests by name, and
+					// past a size it cannot; see vitest.testNames.mts.
+					setupFiles: ['./vitest.testNames.mts'],
 					// Set before the sources run `dotenv.config()` — dotenv does not override existing
 					// process.env keys, so these win over whatever the local `.env` holds.
 					env: {
@@ -66,6 +69,9 @@ export default defineConfig({
 					name: 'integration',
 					include: ['test/integration/*.itest.mts'],
 					server: { deps: { inline: inlineDeps } },
+					// Caps how long a test's full name may be — the mutation gate selects tests by name, and
+					// past a size it cannot; see vitest.testNames.mts.
+					setupFiles: ['./vitest.testNames.mts'],
 					// Redis connection params (hosts/user/password/cluster flag) come from .env; the overrides
 					// below are pinned: per-service keyspace and ephemeral port.
 					//
