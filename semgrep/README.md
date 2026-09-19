@@ -33,6 +33,13 @@ directory (custom + vendored) in one shot.
 - The committed YAML is a frozen snapshot — the registry can change server-side,
   so scans use these files, not the live registry. To update deliberately:
   `./vendor/refresh.sh`, then review `git diff` and commit.
+- ⚠️ `vendor/secrets.yml` carries **one deliberate edit** from the registry copy, re-applied by
+  `refresh.sh` on every fetch. The `detected-slack-webhook` rule ships the canonical Slack
+  documentation webhook as a literal `pattern-not:`, and GitHub push protection cannot tell that
+  placeholder from a live credential — it blocked the first push of every repo carrying this pack,
+  once per repo. It is rewritten as the equivalent `pattern-not-regex`: the same one URL excluded,
+  the same webhooks detected. A `git diff` against a fresh registry pull shows that line, and only
+  that line.
 - `p/javascript` and `p/nodejs` are **not** vendored: the former has the same
   rule-id set as `p/typescript`, the latter is a strict subset of it. Vendoring
   them would only add duplicates.
