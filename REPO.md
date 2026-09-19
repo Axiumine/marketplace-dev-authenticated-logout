@@ -32,6 +32,20 @@ ungated for a long time, and so were `eslint.config.js`, `.prettierrc` and `.pre
 the three was in the hook's `RELEVANT_PATHS`, so a commit touching only them skipped every gate there
 is. All three are in the filter now.
 
+## Why the mutation gate is hook-only
+
+This does not weaken anything: the threshold stays 100, `pre-push` still blocks, and no survivor is ever
+answered by lowering a number. What changes is **who starts the run**. A full pass costs tens of minutes
+and holds the whole machine at 28 workers while it lasts, so an on-demand run is time taken from the
+person waiting for the work.
+
+Go through the package script if a run is ever authorised — never `npx stryker run`, which skips whatever
+the script sets up around it.
+
+A survivor is answered by writing the test it names and letting the next push run the gate. If a mutant
+has to be reproduced first, apply it by hand in the source and run `yarn test` — that is seconds, it
+names the tests that should have failed, and it costs nobody the machine.
+
 ## Why Qodana runs in both hooks
 
 **`git merge --no-ff` never fires `pre-commit`** — git runs that hook for `git commit` only — so in the
