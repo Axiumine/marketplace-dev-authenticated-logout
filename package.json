@@ -15,6 +15,7 @@
     "test:integration": "vitest run --project integration",
     "test:cov": "vitest run --coverage && node scripts/coverage-audit.mjs",
     "test:mutation": "stryker run",
+    "typecheck": "tsc -p tsconfig.test.json",
     "lint": "eslint --fix . && prettier --write .",
     "lint:check": "eslint . && prettier --check .",
     "update": "yarn upgrade-interactive --latest --network-timeout 100000",
