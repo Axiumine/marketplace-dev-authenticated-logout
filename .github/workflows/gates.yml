@@ -49,7 +49,16 @@ jobs:
   gates:
     name: gates
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # ⚠️ 120, not 45, and the reason is Gate 7. The first `push: main` run of this
+    # workflow was cancelled at exactly 45 minutes in marketplace-admin,
+    # marketplace-shopowner and marketplace-user, with every gate ahead of mutation
+    # green — and an exceeded `timeout-minutes` reports as `cancelled`, never as
+    # `failure`, which reads like somebody pressed a button rather than like a budget
+    # running out. A shared runner is several times slower at Stryker than the
+    # workstation the local pre-push figures come from, and mutation is the gate
+    # ADR-055 §4 deliberately kept in CI rather than leaving hook-only. This stays a
+    # cap and not a removal: a hung job still dies, it does not run for six hours.
+    timeout-minutes: 120
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
