@@ -2,13 +2,14 @@
 # pre-commit — secret guard, then the lint, coverage and Qodana quality gates.
 #
 # Installed as a per-repo copy (not a symlink: nothing else can move out from
-# under it). Five independent checks, cheapest first — check 0 reads the
-# working tree, checks 1-4 the staged index:
+# under it). Six independent checks, cheapest first — check 0 reads the
+# working tree, checks 1-5 the staged index:
 #   0. a working-tree env line the parsers here disagree on -> block
 #   1. staged PATH looks like a secret file             -> block
 #   2. staged ADDED LINES contain a high-entropy secret -> block
 #   3. eslint or prettier is not clean                  -> block  (see below)
-#   4. coverage < 100% or Qodana finds a problem        -> block  (see below)
+#   4. types — yarn typecheck                           -> block  (see below)
+#   5. coverage < 100% or Qodana finds a problem        -> block  (see below)
 #
 # Patterns are deliberately narrow enough that the committed `env` / `npmrc`
 # placeholder templates pass, and a line that is a self-declared placeholder
@@ -310,7 +311,7 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
-# Gates 3 and 4 — lint, then 100% coverage, then Qodana. Same bars as CI, before
+# Gates 3, 4 and 5 — lint, types, then 100% coverage, then Qodana. Same bars as CI, before
 # the commit instead of after the push.
 #
 # Lint is first of the three: it is by far the cheapest, and a reformat is the
@@ -447,7 +448,7 @@ if ! node_satisfies; then
 fi
 
 if ! command -v yarn > /dev/null 2>&1; then
-	gate_block 'yarn not found in PATH — cannot run the lint or coverage gates.' \
+	gate_block 'yarn not found in PATH — cannot run the lint, type-check or coverage gates.' \
 		'npm i -g yarn@1.22.22'
 fi
 
@@ -465,6 +466,27 @@ and the yaml are in scope too, which is where drift used to sit unnoticed.
 Fix it with `yarn lint`, then stage what it rewrote. Never silence a rule to get
 past this: a path that belongs to neither tool belongs in .prettierignore or in
 the `ignores` block of eslint.config.js, with the reason next to it.
+
+Bypass once (pre-push still gates): git commit --no-verify
+EOF
+	exit 1
+fi
+
+echo 'pre-commit: type-checking (yarn typecheck)…'
+
+if ! yarn typecheck; then
+	cat >&2 << 'EOF'
+
+pre-commit: BLOCKED — the project does not type-check.
+
+`tsconfig.json` compiles src/ alone and vitest strips types instead of checking
+them, so until this gate existed nothing ever read test/ as TypeScript: a test
+could hand a resolver the wrong shape and every gate here stayed green.
+`yarn typecheck` is `tsconfig.test.json` — the same compiler options over src/,
+test/ and the vitest configs, with no emit.
+
+Fix the errors above. Do NOT relax tsconfig.json, and do not narrow the include
+in tsconfig.test.json.
 
 Bypass once (pre-push still gates): git commit --no-verify
 EOF

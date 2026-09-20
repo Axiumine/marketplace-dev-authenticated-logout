@@ -5,10 +5,11 @@ happens when you commit, push, or watch a gate fail. [`CLAUDE.md`](./CLAUDE.md) 
 
 ## Hooks
 
-`git push` runs `.githooks/pre-push`, a blocking **six**-step gate: `yarn semgrep:ci` (Semgrep SAST over the
+`git push` runs `.githooks/pre-push`, a blocking **seven**-step gate: `yarn semgrep:ci` (Semgrep SAST over the
 sources, vendored rules, pinned image, `--network none`), then trivy (dependency advisories, HIGH and
 CRITICAL, production tree only), then `yarn lint:check` (eslint, then
-`prettier --check`, both over the whole tree), then `yarn test:cov` (100% on every metric), then
+`prettier --check`, both over the whole tree), then `yarn typecheck` (`tsc -p tsconfig.test.json`, src/ and
+test/, no emit), then `yarn test:cov` (100% on every metric), then
 `yarn test:mutation` (Stryker, `thresholds.break: 100`), then Qodana (`./qodana.sh`, gated by
 `qodana.yaml`: coverage 100 total / 100 fresh and the license audit). Keep the hook executable: git skips
 a non-executable hook with only a hint, so the gate disappears without ever failing.
@@ -20,13 +21,13 @@ profile. The trivy step is the check that reports — it reads `yarn.lock` nativ
 devDependencies, and blocks on HIGH or CRITICAL with the CVE id and the fixed version. Bypass for a Docker
 or network outage, never for a finding: `SKIP_TRIVY=1 git push`.
 
-`git commit` runs `.githooks/pre-commit`, which is the secret guard *and* three of those six — lint,
-coverage, Qodana. Semgrep, trivy and mutation are pre-push only.
+`git commit` runs `.githooks/pre-commit`, which is the secret guard *and* four of those seven — lint,
+types, coverage, Qodana. Semgrep, trivy and mutation are pre-push only.
 
 Semgrep and trivy lead because they are the two cheap ones — about three seconds and, with the
 vulnerability database already pulled, under one — against the minutes the rest take together, so a rule
 violation or an advisory is reported before anything slow runs.
-Lint leads the four that follow because it is the cheapest of them and the only one that can fail on a
+Lint leads the five that follow because it is the cheapest of them and the only one that can fail on a
 file the others are perfectly happy with — the next `yarn lint` would rewrite it anyway. It was
 ungated for a long time, and so were `eslint.config.js`, `.prettierrc` and `.prettierignore`: none of
 the three was in the hook's `RELEVANT_PATHS`, so a commit touching only them skipped every gate there

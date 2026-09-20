@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Six gates, all blocking:
+# Seven gates, all blocking:
 #   1. semgrep  — SAST: vendored rules, pinned image, offline (yarn semgrep:ci)
 #   2. trivy    — dependency advisories, HIGH+ , production tree only
 #   3. lint     — eslint + prettier --check over the whole tree (yarn lint:check)
-#   4. coverage — 100% on every metric (yarn test:cov)
-#   5. mutation — 100% mutation score (yarn test:mutation)
-#   6. Qodana   — inspections, SAST, license audit, coverage (qodana.yaml)
+#   4. types    — tsc over src/ and test/, no emit (yarn typecheck)
+#   5. coverage — 100% on every metric (yarn test:cov)
+#   6. mutation — 100% mutation score (yarn test:mutation)
+#   7. Qodana   — inspections, SAST, license audit, coverage (qodana.yaml)
 #
 # Coverage proves the lines ran. Mutation proves the assertions actually catch a
 # change in them. Qodana proves nothing else regressed — and is the only gate
-# that ever sees the merge commit (see gate 6). Neither number may be lowered: if one goes red the fix is a test,
+# that ever sees the merge commit (see gate 7). Neither number may be lowered: if one goes red the fix is a test,
 # a deleted dead branch, or — for a provably equivalent mutant — a documented
 # `// Stryker disable next-line <Mutator>: <why>`. See COVERAGE.md.
 #
@@ -145,7 +146,7 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ -n "${SKIP_SEMGREP:-}" ]; then
-	echo 'pre-push [1/6]: Semgrep gate skipped — SKIP_SEMGREP is set.' >&2
+	echo 'pre-push [1/7]: Semgrep gate skipped — SKIP_SEMGREP is set.' >&2
 else
 	# $1 = what is wrong, $2… = the command(s) that fix it. A missing prerequisite
 	# blocks; it never warns and continues. A gate that steps aside when it cannot
@@ -201,7 +202,7 @@ else
 		semgrep_block "semgrep image $SEMGREP_IMAGE is not present locally." \
 			"docker pull $SEMGREP_IMAGE"
 
-	echo "pre-push [1/6]: running the SAST gate ($SEMGREP_IMAGE)…"
+	echo "pre-push [1/7]: running the SAST gate ($SEMGREP_IMAGE)…"
 
 	if ! yarn semgrep:ci; then
 		cat >&2 <<'MSG'
@@ -224,7 +225,7 @@ MSG
 		exit 1
 	fi
 
-	echo 'pre-push [1/6]: Semgrep clean.'
+	echo 'pre-push [1/7]: Semgrep clean.'
 fi
 
 # ---------------------------------------------------------------------------
@@ -263,7 +264,7 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ -n "${SKIP_TRIVY:-}" ]; then
-	echo 'pre-push [2/6]: dependency-advisory gate skipped — SKIP_TRIVY is set.' >&2
+	echo 'pre-push [2/7]: dependency-advisory gate skipped — SKIP_TRIVY is set.' >&2
 else
 	# Same contract as the SAST gate above: a missing prerequisite blocks, it never
 	# warns and continues. A gate that steps aside when it cannot run is not a gate.
@@ -306,7 +307,7 @@ else
 		trivy_block "trivy image $TRIVY_IMAGE is not present locally." \
 			"docker pull $TRIVY_IMAGE"
 
-	echo "pre-push [2/6]: checking dependency advisories ($TRIVY_IMAGE)…"
+	echo "pre-push [2/7]: checking dependency advisories ($TRIVY_IMAGE)…"
 
 	# --db-repository is not a preference: from here mirror.gcr.io answers 404 for
 	# the database layer and trivy treats that as fatal rather than falling back to
@@ -346,10 +347,10 @@ MSG
 		exit 1
 	fi
 
-	echo 'pre-push [2/6]: no HIGH or CRITICAL advisory in the production tree.'
+	echo 'pre-push [2/7]: no HIGH or CRITICAL advisory in the production tree.'
 fi
 
-echo "pre-push [3/6]: checking lint and formatting (yarn lint:check)…"
+echo "pre-push [3/7]: checking lint and formatting (yarn lint:check)…"
 
 if ! yarn lint:check; then
 	cat >&2 <<'MSG'
@@ -371,7 +372,27 @@ MSG
 	exit 1
 fi
 
-echo "pre-push [4/6]: enforcing 100% test coverage (yarn test:cov)…"
+echo "pre-push [4/7]: type-checking (yarn typecheck)…"
+
+if ! yarn typecheck; then
+	cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — the project does not type-check.
+
+`tsconfig.json` compiles src/ alone and vitest strips types instead of checking
+them, so nothing else here reads test/ as TypeScript. `yarn typecheck` is
+`tsconfig.test.json`: the same compiler options over src/, test/ and the vitest
+configs, with no emit.
+
+Fix the errors above (do NOT relax the compiler options, and do not narrow the
+include), then push again.
+────────────────────────────────────────────────────────────────────────────
+MSG
+	exit 1
+fi
+
+echo "pre-push [5/7]: enforcing 100% test coverage (yarn test:cov)…"
 
 if ! yarn test:cov; then
 	cat >&2 <<'MSG'
@@ -392,7 +413,7 @@ MSG
 	exit 1
 fi
 
-echo "pre-push [5/6]: enforcing 100% mutation score (yarn test:mutation)…"
+echo "pre-push [6/7]: enforcing 100% mutation score (yarn test:mutation)…"
 
 if ! yarn test:mutation; then
 	cat >&2 <<'MSG'
@@ -420,7 +441,7 @@ MSG
 fi
 
 # ---------------------------------------------------------------------------
-# Gate 5 — Qodana. It runs here as well as in pre-commit, for two reasons that
+# Gate 7 — Qodana. It runs here as well as in pre-commit, for two reasons that
 # pre-commit structurally cannot cover.
 #
 # 1. `git merge --no-ff` never fires pre-commit. Git runs that hook for
@@ -513,7 +534,7 @@ docker image inspect "$LINTER" > /dev/null 2>&1 ||
 		'# get a project token from https://qodana.cloud, then:' \
 		"echo 'QODANA_TOKEN=<token>' >> .env"
 
-echo "pre-push [6/6]: enforcing the Qodana gate ($LINTER)…"
+echo "pre-push [7/7]: enforcing the Qodana gate ($LINTER)…"
 
 if ! SKIP_TESTS=1 ./qodana.sh --results-dir .qodana/results; then
 	cat >&2 <<'MSG'

@@ -255,7 +255,7 @@ describe('SERVICE_NAME', () => {
 	 * a variable they have not written yet goes looking for a line that is not in the file.
 	 */
 	it('reports a missing variable before a misshapen one', () => {
-		const env = { ...validEnv(), REDIS_URL: SHAPED.redisUrl, PORT: MISSHAPEN.port }
+		const env: Record<string, string> = { ...validEnv(), REDIS_URL: SHAPED.redisUrl, PORT: MISSHAPEN.port }
 		delete env.REDIS_KEY
 
 		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: REDIS_KEY')

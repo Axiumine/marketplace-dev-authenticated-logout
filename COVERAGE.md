@@ -40,8 +40,8 @@ red means the work is not done, not that the number is wrong.
 | Coverage file audit | `scripts/coverage-audit.mjs` | the same `yarn test:cov` exits non-zero if a source file `coverage.include` gates is absent from the report and unnamed |
 | Local mutation run | `stryker.config.mjs` → `thresholds.break` | `yarn test:mutation` exits non-zero if the score < 100 |
 | Qodana scan gate | `qodana.yaml` → `failureConditions.testCoverageThresholds` (`total`/`fresh` = 100) | `./qodana.sh` fails the scan if coverage < 100% |
-| Git `pre-commit` | `.githooks/pre-commit` | blocks the commit if `yarn test:cov` **or** the Qodana scan fails |
-| Git `pre-push` | `.githooks/pre-push` | blocks the push if `yarn lint:check`, `yarn test:cov`, `yarn test:mutation` **or** the Qodana scan fails |
+| Git `pre-commit` | `.githooks/pre-commit` | blocks the commit if `yarn typecheck`, `yarn test:cov` **or** the Qodana scan fails |
+| Git `pre-push` | `.githooks/pre-push` | blocks the push if `yarn lint:check`, `yarn typecheck`, `yarn test:cov`, `yarn test:mutation` **or** the Qodana scan fails |
 
 The three coverage layers read the same coverage run (vitest, v8 provider, lcov →
 `coverage/lcov.info`, `coverage.include` over `src/**/*.mts`). Change coverage
