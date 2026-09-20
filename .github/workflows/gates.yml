@@ -36,8 +36,13 @@
 # statements and six functions short. So a package that cannot measure coverage on a
 # runner declares the hermetic subset as `test:unit`, this job runs that instead, and the
 # 100%-on-four-metrics coverage gate stays local, where the datastores are. Everywhere
-# else `yarn test:cov` runs in full. ADR-055 §Risks records the residue; it is the part
-# of R63 this workflow does not close.
+# else `yarn test:cov` runs in full. The mutation gate needed the same treatment one step
+# later: db-setup's `mutate` covers migrations/**, which migrate-mongo replays against a
+# real database or not at all, so 60 of its 943 mutants came back survived and the gate
+# read 85.68 against a break threshold of 100. A package in that position declares
+# `test:mutation:ci` — the same config with the database-only patterns dropped — and that
+# is what runs here. ADR-055 §Risks records both residues; they are the part of R63 this
+# workflow does not close.
 name: Gates
 
 on:
@@ -110,10 +115,22 @@ jobs:
           else
             coverage=full
           fi
+          # The mutation gate has the same shape and needed it one gate later. A package whose
+          # mutants cannot all be killed without a datastore declares `test:mutation:ci`, and that
+          # is what runs. Only marketplace-db-setup declares one: only its `mutate` covers files a
+          # real database replays, because the nine services already point Stryker at a unit-only
+          # vitest config, so nothing of theirs was ever in this position.
+          if [ "$(has test:mutation:ci)" = true ]; then
+            mutation=ci
+          elif [ "$(has test:mutation)" = true ]; then
+            mutation=full
+          else
+            mutation=none
+          fi
           {
             echo "lint=$(has lint:check)"
             echo "typecheck=$(has typecheck)"
-            echo "mutation=$(has test:mutation)"
+            echo "mutation=$mutation"
             echo "coverage=$coverage"
           } >> "$GITHUB_OUTPUT"
 
@@ -158,5 +175,13 @@ jobs:
         run: yarn test:unit
 
       - name: Gate 7 - mutation score 100 (yarn test:mutation)
-        if: steps.scripts.outputs.mutation == 'true'
+        if: steps.scripts.outputs.mutation == 'full'
         run: yarn test:mutation
+
+      # marketplace-db-setup only: 582 of its 943 mutants, the ones whose killers do not
+      # need MongoDB. The break threshold is still 100 and nothing is excused — the
+      # database-only patterns are dropped from `mutate`, and `.githooks/pre-push` still
+      # runs the full config against the replica set the workstation has.
+      - name: Gate 7 - mutation score 100 on the hermetic subset (yarn test:mutation:ci)
+        if: steps.scripts.outputs.mutation == 'ci'
+        run: yarn test:mutation:ci
