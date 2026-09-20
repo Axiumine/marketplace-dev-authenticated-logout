@@ -37,7 +37,7 @@
   "type": "module",
   "dependencies": {
     "@apollo/server": "^5.5.1",
-    "@as-integrations/koa": "^2.0.0",
+    "@as-integrations/koa": "^3.0.0",
     "@axiumine/koa-utils": "^7.1.0",
     "@axiumine/marketplace-common": "^4.2.1",
     "@node-rs/bcrypt": "^1.10.7",
