@@ -5,9 +5,10 @@ happens when you commit, push, or watch a gate fail. [`CLAUDE.md`](./CLAUDE.md) 
 
 ## Hooks
 
-`git push` runs `.githooks/pre-push`, a blocking **seven**-step gate: `yarn semgrep:ci` (Semgrep SAST over the
+`git push` runs `.githooks/pre-push`, a blocking **eight**-step gate: `yarn semgrep:ci` (Semgrep SAST over the
 sources, vendored rules, pinned image, `--network none`), then trivy (dependency advisories, HIGH and
-CRITICAL, production tree only), then `yarn lint:check` (eslint, then
+CRITICAL, production tree only), then the OpenSSF Scorecard floor (`.scorecard-floor`, supply-chain
+posture read from the GitHub API, ADR-054), then `yarn lint:check` (eslint, then
 `prettier --check`, both over the whole tree), then `yarn typecheck` (`tsc -p tsconfig.test.json`, src/ and
 test/, no emit), then `yarn test:cov` (100% on every metric), then
 `yarn test:mutation` (Stryker, `thresholds.break: 100`), then Qodana (`./qodana.sh`, gated by

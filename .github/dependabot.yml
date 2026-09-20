@@ -1,0 +1,64 @@
+# Dependabot — what raises Scorecard's Dependency-Update-Tool check, and nothing more.
+#
+# ⚠️ READ THIS BEFORE MERGING ANY DEPENDABOT PULL REQUEST.
+# Every gate this platform has — semgrep, trivy, lint, typecheck, 100% coverage, 100%
+# mutation score, Qodana — lives in .githooks/, wired by `core.hooksPath`, which is git
+# config local to a real clone. Dependabot never clones locally and never runs `prepare`,
+# and a merge from the GitHub UI is a server-side operation with no local git process in
+# the path. So a Dependabot PR merged from the browser has passed NOTHING.
+#
+# The procedure is therefore not optional: fetch the branch, check it out, `yarn install`,
+# and let pre-commit and pre-push run for real. Merge only after they pass. This is the
+# whole control — there is no CI reproducing those gates (ADR-054 records why).
+#
+# ⚠️ YAML forbids tabs — see the note in .github/workflows/scorecard.yml.
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'saturday'
+      time: '03:00'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+    groups:
+      # One PR for the whole toolchain rather than fifteen. The toolchain is where every
+      # advisory this platform currently carries lives, and a grouped bump is one local
+      # verification run instead of fifteen.
+      dev-toolchain:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+    ignore:
+      # ⚠️ Never auto-bumped. Moving a consumer's range onto a new
+      # @axiumine/marketplace-common is step 9 of the mandatory nine-step release in
+      # BEs/marketplace-common/REPO.md §Publishing a release, and it is deliberately
+      # hand-driven: the release cuts the version, then each consumer moves. A bot PR
+      # arriving out of that order would land the range move before — or instead of — the
+      # release it belongs to.
+      - dependency-name: '@axiumine/marketplace-common'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'saturday'
+      time: '03:30'
+      timezone: 'Etc/UTC'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+    groups:
+      actions:
+        patterns:
+          - '*'

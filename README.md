@@ -1,5 +1,7 @@
 # marketplace-dev-authenticated-logout
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Axiumine/marketplace-dev-authenticated-logout/badge)](https://scorecard.dev/viewer/?uri=github.com/Axiumine/marketplace-dev-authenticated-logout)
+
 > [!WARNING]
 > **Work in progress — this software is not tested yet.** It has never run outside a developer
 > workstation: no real deployment, no load test, no security review, no upgrade path. Parts of the
