@@ -23,15 +23,18 @@
 #   scorecard — has its own workflow (scorecard.yml) and grades the repository rather
 #               than a diff, so running it per pull request would say nothing new.
 #
-# ⚠️ And one gate runs here in a weaker form, in the nine backend services only. Their
-# `yarn test:cov` runs two vitest projects, and the `integration` one is not hermetic:
-# it needs the platform's MongoDB replica set with the MONGO_TEST_* users provisioned,
-# its Redis with the ACL that grants the `marketplaceDev:itest:` namespace, and the
-# sibling marketplace-db-setup checkout, whose migrations its globalSetup replays to
-# get the real $jsonSchema validators. None of the three exists on a runner, and the
-# credentials are read from a file that is never committed. So where a
-# `name: 'integration'` project is in the default run, this job runs `yarn test:unit`
-# — the same suite minus that project, with both datasources mocked — and the
+# ⚠️ And one gate runs here in a weaker form, in ten of the fourteen packages. In the
+# nine backend services `yarn test:cov` runs two vitest projects, and the `integration`
+# one is not hermetic: it needs the platform's MongoDB replica set with the MONGO_TEST_*
+# users provisioned, its Redis with the ACL that grants the `marketplaceDev:itest:`
+# namespace, and the sibling marketplace-db-setup checkout, whose migrations its
+# globalSetup replays to get the real $jsonSchema validators. None of the three exists on
+# a runner, and the credentials are read from a file that is never committed.
+# marketplace-db-setup is the tenth, for the same reason in a different shape:
+# test/migrations.test.mjs replays the real migrations against the real replica set and
+# skips itself when there is none, which leaves the suite green and the report twenty
+# statements and six functions short. So a package that cannot measure coverage on a
+# runner declares the hermetic subset as `test:unit`, this job runs that instead, and the
 # 100%-on-four-metrics coverage gate stays local, where the datastores are. Everywhere
 # else `yarn test:cov` runs in full. ADR-055 §Risks records the residue; it is the part
 # of R63 this workflow does not close.
@@ -96,10 +99,13 @@ jobs:
         id: scripts
         run: |
           has() { node -p "Boolean(require('./package.json').scripts['$1'])"; }
-          # An `integration` project in the default vitest run is exactly what makes the
-          # coverage gate need datastores — so that is what is tested for, rather than a
-          # list of service names this file would then have to be kept in step with.
-          if grep -q "name: 'integration'" vitest.config.mts 2> /dev/null; then
+          # A package that cannot measure coverage on a runner declares the hermetic subset
+          # as `test:unit`, and that declaration is what is read here — not a list of service
+          # names, and not a grep of the vitest config. The grep came first and was wrong:
+          # marketplace-db-setup's config is `vitest.config.mjs` and names no projects at all,
+          # so `name: 'integration'` in `vitest.config.mts` matched nothing and put its coverage
+          # gate on a runner with no MongoDB, twenty statements short of its own threshold.
+          if [ "$(has test:unit)" = true ]; then
             coverage=unit
           else
             coverage=full
@@ -144,7 +150,8 @@ jobs:
         if: steps.scripts.outputs.coverage == 'full'
         run: yarn test:cov
 
-      # The nine services only, and not a lowered threshold — a different gate, named
+      # The nine services and marketplace-db-setup, and not a lowered threshold — a
+      # different gate, named
       # as such. The coverage threshold is untouched and the hook still enforces it.
       - name: Gate 6 - unit suite, no coverage gate (yarn test:unit)
         if: steps.scripts.outputs.coverage == 'unit'
