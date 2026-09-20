@@ -1,0 +1,146 @@
+# The platform's own gates, run on GitHub — the second caller of the gates the
+# .githooks/ hooks run locally (ADR-055).
+#
+# ⚠️ This workflow exists for one path only: a pull request merged in the browser.
+# Every other gate on this platform is a local git hook, and a merge performed on
+# github.com runs no hook at all — so before this file, a Dependabot pull request
+# merged with the green button reached main having passed nothing (RISK_REGISTER R63).
+# `required_status_checks` on main names the `gates` job below, which is why the job
+# id must not be renamed: the branch protection rule on all sixteen repositories
+# refers to it by that exact string.
+#
+# ⚠️ YAML forbids tabs. The workspace-wide "indentation is tabs" rule is enforced by
+# eslint and prettier over JavaScript and TypeScript — it cannot apply here.
+#
+# ⚠️ Every `uses:` is pinned to a commit SHA, not a tag: Scorecard's
+# Pinned-Dependencies check grades this file too, and a tag is mutable.
+#
+# Six of the eight pre-push gates run here, in the hook's own order. The two that
+# do not:
+#
+#   Qodana    — needs a JetBrains Cloud token this repository does not hold. It stays
+#               a local-only gate; the hook is still the only place it runs.
+#   scorecard — has its own workflow (scorecard.yml) and grades the repository rather
+#               than a diff, so running it per pull request would say nothing new.
+#
+# ⚠️ And one gate runs here in a weaker form, in the nine backend services only. Their
+# `yarn test:cov` runs two vitest projects, and the `integration` one is not hermetic:
+# it needs the platform's MongoDB replica set with the MONGO_TEST_* users provisioned,
+# its Redis with the ACL that grants the `marketplaceDev:itest:` namespace, and the
+# sibling marketplace-db-setup checkout, whose migrations its globalSetup replays to
+# get the real $jsonSchema validators. None of the three exists on a runner, and the
+# credentials are read from a file that is never committed. So where a
+# `name: 'integration'` project is in the default run, this job runs `yarn test:unit`
+# — the same suite minus that project, with both datasources mocked — and the
+# 100%-on-four-metrics coverage gate stays local, where the datastores are. Everywhere
+# else `yarn test:cov` runs in full. ADR-055 §Risks records the residue; it is the part
+# of R63 this workflow does not close.
+name: Gates
+
+on:
+  pull_request:
+  push:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # ⚠️ No `cache: yarn`, deliberately. This workflow runs on pull requests from
+      # anywhere, and a dependency cache is state one pull request writes and the next
+      # reads — the one input to a security gate that a contributor could choose.
+      # A cold install costs well under a minute; the gates below cost minutes.
+
+      # packageManager pins yarn 1.22.22 in every package.json; corepack is what
+      # honours it, so the runner uses the same yarn the hooks do.
+      - name: Enable corepack
+        run: corepack enable
+
+      # --frozen-lockfile is the point: an install that may rewrite yarn.lock proves
+      # nothing about the lockfile under review. The committed lockfile carries
+      # registry.npmjs.org URLs (scripts/lockfile-registry-filter.sh rewrites the
+      # local proxy out on the way into git), so this resolves from the public
+      # registry with no configuration.
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # Not every package declares every script: marketplace-db-setup has neither
+      # eslint nor prettier nor TypeScript by design (ADR-024, its content is applied
+      # migrations). Reading package.json keeps this file byte-identical across all
+      # fourteen packages instead of forking it per repository.
+      - name: Which gates does this package declare
+        id: scripts
+        run: |
+          has() { node -p "Boolean(require('./package.json').scripts['$1'])"; }
+          # An `integration` project in the default vitest run is exactly what makes the
+          # coverage gate need datastores — so that is what is tested for, rather than a
+          # list of service names this file would then have to be kept in step with.
+          if grep -q "name: 'integration'" vitest.config.mts 2> /dev/null; then
+            coverage=unit
+          else
+            coverage=full
+          fi
+          {
+            echo "lint=$(has lint:check)"
+            echo "typecheck=$(has typecheck)"
+            echo "mutation=$(has test:mutation)"
+            echo "coverage=$coverage"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Gate 1 - SAST (yarn semgrep:ci)
+        run: yarn semgrep:ci
+
+      # The hook's trivy invocation, flag for flag. --skip-dirs .stryker-tmp is
+      # load-bearing there and harmless here; the named db cache volume is not
+      # reproduced because a runner is thrown away after every job.
+      - name: Gate 2 - dependency advisories (trivy)
+        run: |
+          docker run --rm \
+            -v "$PWD":/src:ro \
+            aquasec/trivy:0.70.0 fs \
+            --db-repository ghcr.io/aquasecurity/trivy-db:2 \
+            --scanners vuln \
+            --skip-dirs node_modules \
+            --skip-dirs .stryker-tmp \
+            --skip-dirs .qodana \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --skip-version-check \
+            /src
+
+      - name: Gate 4 - lint and formatting (yarn lint:check)
+        if: steps.scripts.outputs.lint == 'true'
+        run: yarn lint:check
+
+      - name: Gate 5 - types (yarn typecheck)
+        if: steps.scripts.outputs.typecheck == 'true'
+        run: yarn typecheck
+
+      - name: Gate 6 - coverage, 100% on every metric (yarn test:cov)
+        if: steps.scripts.outputs.coverage == 'full'
+        run: yarn test:cov
+
+      # The nine services only, and not a lowered threshold — a different gate, named
+      # as such. The coverage threshold is untouched and the hook still enforces it.
+      - name: Gate 6 - unit suite, no coverage gate (yarn test:unit)
+        if: steps.scripts.outputs.coverage == 'unit'
+        run: yarn test:unit
+
+      - name: Gate 7 - mutation score 100 (yarn test:mutation)
+        if: steps.scripts.outputs.mutation == 'true'
+        run: yarn test:mutation

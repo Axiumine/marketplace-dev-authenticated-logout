@@ -18,6 +18,8 @@ Tier/concern split, port table, terminology, auth model live there. Not here.
 before a commit, not on one file, not to confirm a survivor is fixed, and never `npx stryker run` either.
 To reproduce a survivor, apply it by hand in the source and run `yarn test` instead.
 Why: [`REPO.md`](./REPO.md).
+⚠️ Since ADR-055 the script has a second caller, `.github/workflows/gates.yml`, which runs it on
+every pull request — two callers, both automated, and a hand is neither.
 
 ## Rules
 
