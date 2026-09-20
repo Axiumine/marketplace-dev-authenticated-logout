@@ -1,15 +1,20 @@
 # Dependabot — what raises Scorecard's Dependency-Update-Tool check, and nothing more.
 #
-# ⚠️ READ THIS BEFORE MERGING ANY DEPENDABOT PULL REQUEST.
-# Every gate this platform has — semgrep, trivy, lint, typecheck, 100% coverage, 100%
-# mutation score, Qodana — lives in .githooks/, wired by `core.hooksPath`, which is git
-# config local to a real clone. Dependabot never clones locally and never runs `prepare`,
-# and a merge from the GitHub UI is a server-side operation with no local git process in
-# the path. So a Dependabot PR merged from the browser has passed NOTHING.
+# ⚠️ READ THIS BEFORE MERGING ANY DEPENDABOT PULL REQUEST — GREEN IS NOT ENOUGH.
+# Six of the eight gates run on the pull request itself since ADR-055:
+# .github/workflows/gates.yml runs semgrep, trivy, lint:check, typecheck, the test suite
+# and mutation, and `main` requires its `gates` check — so the browser merge no longer
+# passes nothing, which is what it passed under ADR-054. The other two do not run there.
+# Qodana needs a JetBrains Cloud token this workspace keeps out of CI; the Scorecard floor
+# has its own workflow and grades the repository's state on GitHub rather than a diff; and
+# in the nine services the integration vitest project — and with it the 100%-on-four-
+# metrics coverage measurement — needs the MongoDB replica set, the Redis ACL and the
+# sibling marketplace-db-setup checkout, none of which a runner has, so CI runs
+# `yarn test:unit` there instead.
 #
-# The procedure is therefore not optional: fetch the branch, check it out, `yarn install`,
-# and let pre-commit and pre-push run for real. Merge only after they pass. This is the
-# whole control — there is no CI reproducing those gates (ADR-054 records why).
+# The procedure is therefore still not optional: fetch the branch, check it out,
+# `yarn install`, and let pre-commit and pre-push run for real. Merge only after they
+# pass. The hooks are the authoritative layer; the green check is the second one.
 #
 # ⚠️ YAML forbids tabs — see the note in .github/workflows/scorecard.yml.
 version: 2
