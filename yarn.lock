@@ -158,12 +158,12 @@
   resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-7.1.0.tgz#929095345ef34839854802bed6b17c8040c99d7d"
   integrity sha512-OnBROgaMfVOriERRPU3lQBrZ8xJg4zZs3LxVeeEr/IrTqSjB2xqgmlDlSZSPyYH9XYwZkp5b9SwvIzc+9JvfQQ==
 
-"@axiumine/marketplace-common@^4.2.1":
-  version "4.4.0"
-  resolved "https://registry.npmjs.org/@axiumine/marketplace-common/-/marketplace-common-4.4.0.tgz#bd1a5c87955177152a9cf216471e17293cf3e934"
-  integrity sha512-K2RtChwisbrNcdhlujkxsXMKdSWOzz9c9bBvZ/AbsenhiSr49YOqt71Vhel9h9r7rXSGTxBkOrC919CeOPPHxw==
+"@axiumine/marketplace-common@^4.5.0":
+  version "4.5.0"
+  resolved "https://registry.npmjs.org/@axiumine/marketplace-common/-/marketplace-common-4.5.0.tgz#dc49960af89d56fd6d09235a1fc2ddf88031b7b4"
+  integrity sha512-6/EiBoHHf3spT1sozXi/MfU9nFHijtMIRtCCP2d3FuHZFU9o90Bf3bnUfi6vpXMpcYV4D6Njdth2VxD5ngNjmA==
   dependencies:
-    graphql-scalars "^1.25.0"
+    graphql-scalars "^2.0.0"
 
 "@babel/code-frame@^7.29.7":
   version "7.29.7"
@@ -2936,10 +2936,10 @@ graphql-depth-limit@^1.1.0:
   dependencies:
     arrify "^1.0.1"
 
-graphql-scalars@^1.25.0:
-  version "1.26.0"
-  resolved "https://registry.npmjs.org/graphql-scalars/-/graphql-scalars-1.26.0.tgz#a84a516689e8b259bddad3c5c40539a485032a84"
-  integrity sha512-o7BnU5yxAFUWTMKpC5yshB12DjzzoxLgEBO9OpOAcxodWrL3sPldD/fqVQoIfcqPH8OclyQilLtg3/7ZRqQUVQ==
+graphql-scalars@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.npmjs.org/graphql-scalars/-/graphql-scalars-2.0.0.tgz#96de418e8861368a954a2391110d28a0fe032eda"
+  integrity sha512-tCd2ddcxlbz5rG7xsfDbjvIssR9c/5EauDYt272pxfxpUNBjFMpnDwukuA3rm1O/9michQDxFfPPAeoQjZtJVQ==
   dependencies:
     tslib "^2.5.0"
 
