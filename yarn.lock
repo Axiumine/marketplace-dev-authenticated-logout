@@ -143,10 +143,10 @@
   resolved "https://registry.npmjs.org/@apollo/utils.withrequired/-/utils.withrequired-3.0.0.tgz#1342bab438528d09c41e43ce33cb976fa9c99e52"
   integrity sha512-aaxeavfJ+RHboh7c2ofO5HHtQobGX4AgUujXP4CXpREHp9fQ9jPi6K9T1jrAKe7HIipoP0OJ1gd6JamSkFIpvA==
 
-"@as-integrations/koa@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.npmjs.org/@as-integrations/koa/-/koa-2.0.0.tgz#e25bf56bbeda3546c77a02bbe5bcf67dfbad5494"
-  integrity sha512-+03RSvRPPCF6xQqEfAiY0r2thBpPzkqfH0HrG9nt3I0w3eqVbeJdTVJ5hMtjJmWcMq0ABDRZUhV3fq7GeolpJw==
+"@as-integrations/koa@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@as-integrations/koa/-/koa-3.0.0.tgz#7e556fc07824766b84928942b2dc10da9ed978ac"
+  integrity sha512-90wJKDaQCBp3Urcb8DJX3Bmx4XujGcehqTnmo3qBQjiuaihlaKWg+JRMs4Vyfp1kqVvKj7Uksg7gt8MfbsYhBw==
 
 "@axiumine/eslint-config-be@^2.0.2":
   version "2.0.2"
