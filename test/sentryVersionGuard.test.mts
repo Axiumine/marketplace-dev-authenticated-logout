@@ -21,12 +21,22 @@ import { describe, expect, it } from 'vitest'
  * anything here failing. The platform must never be reduced on the strength of that list, and the
  * second case below is what proves it is not: the scrubber removes the header on its own, with no SDK
  * involved at all.
+ *
+ * 10.69.0 → 10.75.0 was the first bump this guard caught, and the comparison is recorded here so the
+ * next one starts from something: every file the claims above rest on is byte-identical between the two
+ * releases — `DEFAULTS` and the base-selection line in `resolveDataCollectionOptions`,
+ * `defaultPiiToCollectionOptions`, `filtering-snippets`, core's `requestdata` integration, and
+ * node-core's `httpServerIntegration`, `httpServerSpansIntegration` and `http/index`. The one change in
+ * the audited surface is additive: `httpHeaders` now also accepts a boolean or an allow/deny object as
+ * a shorthand for both directions, and the explicit `{ request: false, response: false }` passed here
+ * still resolves through `??` to both `false`. No `dataCollection` category was added, which is the
+ * change that would have mattered most — an omitted category is an enabled one.
  */
 
-const PINNED = '10.69.0'
+const PINNED = '10.75.0'
 
 const MIGRATION =
-	'the Sentry SDK moved off 10.69.0. Re-read `resolveDataCollectionOptions`, `httpServerSpansIntegration` and `httpServerIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from. `maxIncomingRequestBodySize` defaults to `"medium"` and the default is the defect — check the name still forwards to `httpServerIntegration`s `maxRequestBodySize`, and that `include.data` on the requestdata integration is still what makes the body an event field.'
+	'the Sentry SDK moved off 10.75.0. Re-read `resolveDataCollectionOptions`, `httpServerSpansIntegration` and `httpServerIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from. `maxIncomingRequestBodySize` defaults to `"medium"` and the default is the defect — check the name still forwards to `httpServerIntegration`s `maxRequestBodySize`, and that `include.data` on the requestdata integration is still what makes the body an event field.'
 
 const installedVersion = async (name: string): Promise<string> => {
 	const manifest = await readFile(new URL(`../node_modules/@sentry/${name}/package.json`, import.meta.url), 'utf8')
