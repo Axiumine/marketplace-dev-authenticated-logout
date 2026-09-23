@@ -23,6 +23,13 @@ export async function disconnectAllDatabases(exitCode: number = 0): Promise<neve
 		code = 1
 	}
 
+	// Flushed before exit, outside the try: this is the one place every fatal path on the platform ends up
+	// (`start()`'s catch, graceful shutdown), and `process.exit` below does not wait for Sentry's network
+	// call — without this, the event captured above (or by whoever called this function) never leaves the
+	// process. `.catch` swallows a flush failure rather than letting this already-fatal function reject
+	// on it — the exit two lines down must run either way.
+	await Sentry.flush(2000).catch(() => undefined)
+
 	// Outside the try: if it stayed inside, a throw on the success branch would end up in
 	// the catch above and the process would exit with 1 instead of the requested exitCode.
 	process.exit(code)

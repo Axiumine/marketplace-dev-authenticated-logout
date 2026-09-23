@@ -161,12 +161,21 @@ export const gracefulShutdown = async (signal: string, apolloServer: ApolloServe
 
 export function onUnhandledRejection(reason: unknown): void {
 	Sentry.captureException(reason)
-	process.exit(1)
+	// `process.exit` is synchronous and tears the process down before Sentry's own network flush would
+	// run — without this, the event for the crash this handler exists to report never leaves the process.
+	// `void`, not `await`: `process.on('unhandledRejection', ...)` wants a synchronous listener. The
+	// `.catch` ahead of `.finally` is what keeps a flush failure from surfacing as a second, unhandled
+	// rejection of its own — the exit below is unconditional either way.
+	void Sentry.flush(2000)
+		.catch(() => undefined)
+		.finally(() => process.exit(1))
 }
 
 export function onUncaughtException(error: unknown): void {
 	Sentry.captureException(error)
-	process.exit(1)
+	void Sentry.flush(2000)
+		.catch(() => undefined)
+		.finally(() => process.exit(1))
 }
 
 /**
@@ -202,8 +211,18 @@ export async function createServer(keygripKeys: IKeygripKeyMaterial[]) {
 	)
 	app.keys = keys
 
-	app.use(async (ctx: IContextLogout, next: Next) => {
-		await authorizationLogoutHandler(keys)(ctx, next)
+	app.use(async (ctx: Context, next: Next) => {
+		/*
+		 * ⚠️ `ctx.app.keys`, read fresh on every request — never the `keys` local above. `onKeys` (below)
+		 * reassigns `app.keys` in place when the record rotates; a handler closed over `keys` would go on
+		 * verifying against the array this process booted with forever, while `ctx.cookies` (which also
+		 * reads `app.keys` live) had already moved on to signing with the new one — a process that can
+		 * mint a cookie its own verifier then 401s. `ctx.app.keys` is typed `Keygrip | string[]` by Koa;
+		 * this service only ever assigns the first. `ctx` is Koa's own `Context` here rather than the
+		 * narrower `IContextLogout` precisely so `.app` is reachable; `authorizationLogoutHandler` still
+		 * types its parameter as `IContextLogout`, which `Context` satisfies structurally.
+		 */
+		await authorizationLogoutHandler(ctx.app.keys as Keygrip)(ctx as unknown as IContextLogout, next)
 	})
 
 	app.use(
@@ -350,7 +369,7 @@ export async function start() {
 		return { app, httpServer, apolloServer, keygripWatch, keygripSubscriber }
 	} catch (error) {
 		console.error('error', error)
-		Sentry.captureException(error) // @fixme does not send the log, verify!
+		Sentry.captureException(error)
 		await disconnectAllDatabases(1)
 	}
 }
@@ -369,7 +388,7 @@ if (process.env.NODE_ENV !== 'test') {
 				process.on('SIGINT', () => gracefulShutdown('SIGINT', srv.apolloServer, srv.httpServer))
 			}
 		})
-		.catch((e: unknown) => {
+		.catch(async (e: unknown) => {
 			/*
 			 * ⚠️ The exit code is the whole point, and it used to be **0**. `checkRequiredEnv()` throws
 			 * outside `start()`'s own try, so a missing variable lands here rather than in the
@@ -382,6 +401,12 @@ if (process.env.NODE_ENV !== 'test') {
 			 */
 			console.error('fatal: the service could not start', e)
 			Sentry.captureException(e)
+			// Flushed before exit for the same reason disconnectAllDatabases and the process handlers
+			// above are: `process.exit` does not wait for Sentry's network call, so the boot-failure event
+			// this whole handler exists to report would otherwise never leave the process. `.catch`
+			// swallows a flush failure rather than letting it escape this already-fatal path — the exit
+			// below must run either way.
+			await Sentry.flush(2000).catch(() => undefined)
 			process.exit(1)
 		})
 }

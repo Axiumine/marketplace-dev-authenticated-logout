@@ -6,7 +6,7 @@ import { sessionKey } from '@axiumine/marketplace-common/others/sessionKeys'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
 import Keygrip from 'keygrip'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 // The sources call dotenv.config() transitively (Redis datasource, handler); this is a
 // belt-and-suspenders load so REDIS_* and MONGODB_URI are present when this file's top level reads them.
@@ -33,6 +33,9 @@ let keygripSubscriber: { close(): Promise<unknown> }
 
 let httpServer: Server
 let base: string
+// The Koa app itself (B1): exposed so the rotation suite below can do exactly what `onKeys` does —
+// reassign `app.keys` in place — without a live Redis pub/sub round trip.
+let app: NonNullable<Awaited<ReturnType<typeof start>>>['app']
 
 // Keys seeded directly by this file (not by the SUT's own logout cleanup) are tracked here at
 // creation time — not in a per-test `finally` — so a seed that throws, or an assertion that fails
@@ -46,6 +49,7 @@ beforeAll(async () => {
 	const server = await start()
 	if (!server) throw new Error('server failed to start against the real Redis cluster')
 	httpServer = server.httpServer
+	app = server.app
 	// Both belong to the live key watch (ADR-034), and both have to be handed back for the drain below:
 	// the timer is unref'd but still fires while the suite runs, and the subscriber is a second
 	// connection nothing else in this file knows about.
@@ -427,5 +431,66 @@ describe('logout service (integration, real Redis cluster)', () => {
 		})
 
 		expect(res.status).toBe(404)
+	})
+})
+
+/*
+ * ⚠️ **B1: a `keygripRotate` must reach the verifier, not only the signer.** `ctx.cookies` reads
+ * `app.keys` live, so a rotation was always visible to SIGNING; the bug was the auth middleware closing
+ * over the boot-time `keys` local instead, so this same process could mint a cookie under the new key and
+ * then 401 its own verification of it on the very next request. `onKeys` (src/index.mts) does exactly one
+ * thing on a rotation — `app.keys = new Keygrip(...)` — so reproducing that assignment here, without a
+ * live Redis pub/sub round trip, exercises precisely what a real rotation does.
+ */
+describe('live key rotation reaches the verifier (B1)', () => {
+	// Newest first, exactly as `onKeys` builds it from a keygrip record and as `loadKeygrip` answers on
+	// boot — Keygrip signs with index 0 and verifies against every entry.
+	const ROTATED_MATERIAL = [Buffer.alloc(64, 7).toString('base64'), ...ITEST_KEYGRIP_KEYS.map((key) => key.material)]
+	const rotatedKeys = new Keygrip(ROTATED_MATERIAL, 'sha512')
+
+	function signedRotatedCookie(refresh: string): string {
+		return `refresh_token=${refresh}; refresh_token.sig=${rotatedKeys.sign(`refresh_token=${refresh}`)}`
+	}
+
+	afterEach(() => {
+		// Never leaked to a test outside this block, whether this one passed or failed.
+		app.keys = keys
+	})
+
+	it('verifies a cookie signed with a key that did not exist when the process booted', async () => {
+		const refresh = randomUUID()
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+		seededKeys.push(refreshKey)
+		await seedRefreshSession(refreshKey)
+
+		// The rotation itself: the one line `onKeys` runs, reassigning `app.keys` in place.
+		app.keys = rotatedKeys
+
+		const res = await callHelloLogout({ cookie: signedRotatedCookie(refresh), authorization: 'Bearer access:xyz' })
+
+		// Before the fix this 401'd: the middleware verified against the boot-time `keys` local, which
+		// this cookie's signature does not match at any index.
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data?: { helloLogout?: { txt: string } }; errors?: unknown }
+		expect(json.errors).toBeUndefined()
+		expect(json.data?.helloLogout).toEqual({ txt: 'Hello from helloLogout' })
+	})
+
+	// The other half of the same guarantee (ADR-034): a rotation must not log out sessions that were
+	// already live. A cookie signed before the rotation still has to verify afterwards, at the older index.
+	it('still verifies a cookie signed before the rotation, once the process has rotated', async () => {
+		const refresh = randomUUID()
+		const refreshKey = sessionKey(`refresh:${refresh}`)
+		seededKeys.push(refreshKey)
+		await seedRefreshSession(refreshKey)
+
+		const preRotationCookie = signedCookie(refresh)
+		app.keys = rotatedKeys
+
+		const res = await callHelloLogout({ cookie: preRotationCookie, authorization: 'Bearer access:xyz' })
+
+		expect(res.status).toBe(200)
+		const json = (await res.json()) as { data?: { helloLogout?: { txt: string } }; errors?: unknown }
+		expect(json.data?.helloLogout).toEqual({ txt: 'Hello from helloLogout' })
 	})
 })

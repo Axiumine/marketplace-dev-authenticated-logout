@@ -195,13 +195,42 @@ describe('mutations.logout', () => {
 		expect(hDel).not.toHaveBeenCalled()
 	})
 
-	it('swallows Redis errors, sends them to Sentry and still returns true', async () => {
+	/*
+	 * ⚠️ **The whole point of B19.** A Redis failure during teardown used to be swallowed into Sentry with
+	 * the mutation still answering `true` — telling the caller the session was gone while `del` had just
+	 * failed. It must now surface as a rejection, still go to Sentry, AND still clear the cookie: none of
+	 * the three is optional, and each is asserted on its own so a fix that only does two of them fails here.
+	 */
+	it('reports a teardown failure to Sentry and rejects, instead of answering true', async () => {
+		const error = new Error('redis down')
+		del.mockRejectedValueOnce(error)
+		const ctx = makeCtx({ refreshToken: 'refresh:abc' })
+
+		await expect(logout.resolve(null, {}, ctx)).rejects.toThrow('Internal Server Error')
+
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(error)
+	})
+
+	// The cookie is the one side effect that must survive a Redis outage: a shared device must never keep
+	// a live refresh_token cookie because teardown failed. Attributes matter too — a hand-written options
+	// literal here would strand the cookie, which is why the resolver reuses `refreshTokenOptions`.
+	it('still clears the refresh cookie, with the options that set it, when teardown fails', async () => {
 		del.mockRejectedValueOnce(new Error('redis down'))
+		const ctx = makeCtx({ refreshToken: 'refresh:abc' })
 
-		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
+		await expect(logout.resolve(null, {}, ctx)).rejects.toThrow()
 
-		expect(captureException).toHaveBeenCalledTimes(1)
-		expect(captureException.mock.calls[0][0]).toBeInstanceOf(Error)
+		const { refreshTokenOptions } = await import('@axiumine/koa-utils/lib/tokenOptions')
+		expect(ctx.cookies.set).toHaveBeenCalledExactlyOnceWith('refresh_token', '', refreshTokenOptions)
+	})
+
+	// A failure anywhere in the teardown — not only on the first `del` — takes the same path: the read, the
+	// unindex and the access-key deletes are exercised elsewhere in this file, so only the failure branch
+	// itself needs covering here.
+	it('rejects on a failure from the session read too, not only from a delete', async () => {
+		hGetAll.mockRejectedValueOnce(new Error('redis down'))
+
+		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).rejects.toThrow('Internal Server Error')
 	})
 })
 

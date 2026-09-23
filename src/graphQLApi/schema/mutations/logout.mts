@@ -1,5 +1,6 @@
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import type { IContextLogout } from '@axiumine/koa-utils/graphQL/schema/context/IContextLogout'
+import { throwInternalError } from '@axiumine/koa-utils/graphQL/throw/throwInternalError'
 import { refreshTokenOptions } from '@axiumine/koa-utils/lib/tokenOptions'
 import { deleteSession, readSessionHash, sessionKey, unindexSession } from '@axiumine/marketplace-common/others/sessionKeys'
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
@@ -21,6 +22,10 @@ export const logout = {
 	type: new GraphQLNonNull(GraphQLBoolean),
 	async resolve(_: unknown, {}, ctx: IContextLogout) {
 		const user = ctx.state.user
+		// ⚠️ Set once teardown finishes, never left unset by a throw the `finally` below did not run: the
+		// mutation must not answer `true` while it is still holding an error a caller — and Sentry — need
+		// to see.
+		let teardownError: unknown
 
 		try {
 			// Read before the delete, because the delete is what makes it unreadable: the session hash is the
@@ -81,11 +86,25 @@ export const logout = {
 			}
 
 			await Promise.all([...accessKeysToRetire].map((key) => redisClient.del(key)))
-
-			// delete cookies
-			ctx.cookies.set('refresh_token', '', refreshTokenOptions)
 		} catch (e) {
-			Sentry.captureException(e)
+			teardownError = e
+		} finally {
+			/*
+			 * ⚠️ **Always, in a `finally`, ahead of the error check below.** This used to sit at the end of
+			 * the `try`, after every fallible Redis call — so a Redis error anywhere above it skipped the
+			 * clear entirely and left a live `refresh_token` cookie on a shared device while the mutation
+			 * still reported the user logged out. The clear reuses `refreshTokenOptions`, the same object
+			 * that set the cookie, so the attributes match by construction.
+			 */
+			ctx.cookies.set('refresh_token', '', refreshTokenOptions)
+		}
+
+		// ⚠️ Surfaced, not swallowed. Reporting `true` after a teardown failure told the caller the session
+		// was gone while it — and possibly the session itself — was still live; the cookie above is cleared
+		// either way, but the return value now agrees with what actually happened.
+		if (teardownError !== undefined) {
+			Sentry.captureException(teardownError)
+			throwInternalError((teardownError as Error).message)
 		}
 
 		return true

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const captureException = vi.fn()
 const captureMessage = vi.fn()
+const flush = vi.fn()
 const RedisConnect = vi.fn()
 const disconnectAllDatabases = vi.fn()
 const loadKeygrip = vi.fn()
@@ -31,7 +32,7 @@ const ROTATED_KEYS = [
 	...KEYS
 ]
 
-vi.mock('@sentry/node', () => ({ captureException, captureMessage }))
+vi.mock('@sentry/node', () => ({ captureException, captureMessage, flush }))
 // redisClient is imported transitively by the handler / resolvers; a bare stub is enough
 // because the unit project never connects — only start()'s failure path is exercised here.
 vi.mock('@axiumine/koa-utils/dataSources/Redis', () => ({ RedisConnect, redisClient }))
@@ -352,22 +353,58 @@ describe('process handlers', () => {
 
 	beforeEach(() => {
 		captureException.mockReset()
+		flush.mockReset().mockResolvedValue(true)
 		exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 	})
 	afterEach(() => exit.mockRestore())
 
-	it('onUnhandledRejection reports the reason and exits 1', () => {
+	/*
+	 * ⚠️ **B14.** `process.exit` is synchronous and does not wait for Sentry's network flush, so a report
+	 * captured right before it used to never leave the process — exactly the crash this handler exists to
+	 * report. `exit` is asserted NOT yet called straight after the synchronous call returns, and only THEN
+	 * awaited into having happened: a mutant that drops the flush (or exits before it settles) makes the
+	 * first assertion below fail instead of just being slower.
+	 */
+	it('onUnhandledRejection reports the reason, flushes Sentry, then exits 1', async () => {
 		const reason = new Error('boom')
+
 		onUnhandledRejection(reason)
+
 		expect(captureException).toHaveBeenCalledWith(reason)
-		expect(exit).toHaveBeenCalledWith(1)
+		expect(exit).not.toHaveBeenCalled()
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+		expect(flush).toHaveBeenCalledExactlyOnceWith(2000)
 	})
 
-	it('onUncaughtException reports the error and exits 1', () => {
+	// A flush that fails to reach Sentry must not maroon the process: `.finally`, not `.then`, is what
+	// keeps the exit unconditional.
+	it('onUnhandledRejection still exits 1 when the flush itself rejects', async () => {
+		flush.mockRejectedValueOnce(new Error('sentry unreachable'))
+
+		onUnhandledRejection(new Error('boom'))
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+	})
+
+	it('onUncaughtException reports the error, flushes Sentry, then exits 1', async () => {
 		const error = new Error('kaboom')
+
 		onUncaughtException(error)
+
 		expect(captureException).toHaveBeenCalledWith(error)
-		expect(exit).toHaveBeenCalledWith(1)
+		expect(exit).not.toHaveBeenCalled()
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+		expect(flush).toHaveBeenCalledExactlyOnceWith(2000)
+	})
+
+	it('onUncaughtException still exits 1 when the flush itself rejects', async () => {
+		flush.mockRejectedValueOnce(new Error('sentry unreachable'))
+
+		onUncaughtException(new Error('kaboom'))
+
+		await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
 	})
 })
 

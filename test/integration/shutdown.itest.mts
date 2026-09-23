@@ -133,16 +133,19 @@ describe('process-level error handlers', () => {
 		exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 	})
 
-	it('exits 1 on an unhandled rejection', () => {
+	// B14: exit now waits on a real (DSN-less, so effectively instant) Sentry.flush before it runs —
+	// see index.unit.test.mts for the mocked-flush version of this same assertion, including the
+	// ordering proof a bare `toHaveBeenCalledWith` here cannot give against a live SDK call.
+	it('exits 1 on an unhandled rejection', async () => {
 		onUnhandledRejection(new Error('itest unhandled rejection'))
 
-		expect(exitSpy).toHaveBeenCalledWith(1)
+		await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1))
 	})
 
-	it('exits 1 on an uncaught exception', () => {
+	it('exits 1 on an uncaught exception', async () => {
 		onUncaughtException(new Error('itest uncaught exception'))
 
-		expect(exitSpy).toHaveBeenCalledWith(1)
+		await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1))
 	})
 })
 
