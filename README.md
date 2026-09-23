@@ -48,10 +48,12 @@ therefore hit `throwAlreadyDone` and deleted nothing, while answering the caller
 fixtures are typed as `IRefreshData` / `IRedisDataUser` and shaped like what the login writers actually
 write; a hand-rolled `hSet` in a new test re-opens the same hole.
 
-⚠️ **The resolver swallows everything into Sentry and returns `true` regardless.** A Redis outage during
-`del` reports a successful logout to the client while the session is still live. That is a deliberate
-trade — the cookie is cleared either way — but it means this mutation's return value is not evidence the
-session died.
+⚠️ **The cookie clears either way; the return value no longer lies about the rest.** A Redis outage during
+teardown reports the error to Sentry and to the caller (`Internal Server Error`) instead of answering
+`true` over a session that may still be live — the resolver used to swallow everything and return `true`
+regardless, which told the client it was logged out while a `del` had actually failed. The `refresh_token`
+cookie clear itself sits in a `finally` and always runs, Redis outage or not, so a shared device never
+keeps a live cookie because teardown failed.
 
 ⚠️ **Only `refresh_token` is a cookie.** The access token travels in the `Authorization` header and has no
 cookie to clear. The clear reuses `refreshTokenOptions` from `koa-utils` — the same object that set it — so
