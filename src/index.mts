@@ -202,8 +202,18 @@ export async function createServer(keygripKeys: IKeygripKeyMaterial[]) {
 	)
 	app.keys = keys
 
-	app.use(async (ctx: IContextLogout, next: Next) => {
-		await authorizationLogoutHandler(keys)(ctx, next)
+	app.use(async (ctx: Context, next: Next) => {
+		/*
+		 * ⚠️ `ctx.app.keys`, read fresh on every request — never the `keys` local above. `onKeys` (below)
+		 * reassigns `app.keys` in place when the record rotates; a handler closed over `keys` would go on
+		 * verifying against the array this process booted with forever, while `ctx.cookies` (which also
+		 * reads `app.keys` live) had already moved on to signing with the new one — a process that can
+		 * mint a cookie its own verifier then 401s. `ctx.app.keys` is typed `Keygrip | string[]` by Koa;
+		 * this service only ever assigns the first. `ctx` is Koa's own `Context` here rather than the
+		 * narrower `IContextLogout` precisely so `.app` is reachable; `authorizationLogoutHandler` still
+		 * types its parameter as `IContextLogout`, which `Context` satisfies structurally.
+		 */
+		await authorizationLogoutHandler(ctx.app.keys as Keygrip)(ctx as unknown as IContextLogout, next)
 	})
 
 	app.use(
