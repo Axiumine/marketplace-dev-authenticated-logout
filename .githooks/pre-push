@@ -487,9 +487,11 @@ else
 	# Column 0 for the heredoc body on purpose: <<- strips every leading tab, which
 	# would flatten the script's own indentation on its way to the interpreter.
 	#
-	# Exit 0 = at or above the floor. 3 = below it. Anything else means the comparison
-	# itself broke, which says nothing at all about the score — reported as its own
-	# failure below rather than dressed up as a finding.
+	# Exit 0 = at or above the floor, every check floored. 3 = a check fell below its floor.
+	# 4 = nothing fell but Scorecard reported a check with no floor line — blocked too, so a
+	# new check cannot sit at 0 unnoticed. Anything else means the comparison itself broke,
+	# which says nothing at all about the score — reported as its own failure below rather
+	# than dressed up as a finding.
 	SCORECARD_VERDICT=0
 	SC_JSON="$SCORECARD_JSON" SC_FLOOR="$SCORECARD_FLOOR_FILE" node <<'EVAL' || SCORECARD_VERDICT=$?
 const fs = require("fs");
@@ -542,7 +544,7 @@ if (unfloored.length) {
 }
 if (out.length) console.error(out.join("\n"));
 if (!fell.length) console.error(`\n  aggregate ${report.score} >= floor ${floorAggregate}`);
-process.exit(fell.length ? 3 : 0);
+process.exit(fell.length ? 3 : unfloored.length ? 4 : 0);
 EVAL
 
 	rm -f "$SCORECARD_JSON"
@@ -575,6 +577,25 @@ In order:
   3. Raise the floor only when a check genuinely improved and you want the new
      number defended from here on. Never to make this message go away — the floor
      is the record of what this repository has already earned.
+────────────────────────────────────────────────────────────────────────────
+MSG
+			exit 1
+			;;
+		4)
+			cat >&2 <<'MSG'
+
+────────────────────────────────────────────────────────────────────────────
+PUSH BLOCKED — Scorecard reported a check with no line in .scorecard-floor. The
+checks are listed above.
+
+⚠️ An unfloored check is not measured against anything: it could score 0 on
+the next scan and this gate would still pass silently. That is the gap this
+blocks, the same one the warning above used to leave open.
+
+Add a `<check-name> = <score>` line to .scorecard-floor for each check listed
+above, at the score Scorecard just reported (never higher than what was
+actually measured, or the very next scan fails this same gate), then push
+again.
 ────────────────────────────────────────────────────────────────────────────
 MSG
 			exit 1
