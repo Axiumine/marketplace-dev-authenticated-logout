@@ -19,38 +19,38 @@ import { start } from '../../src/index.mts'
  * the way out is not one another file is using.
  */
 describe('start() when the KEK does not open the keygrip record', () => {
-	const realKek = process.env.KEYGRIP_KEK
+  const realKek = process.env.KEYGRIP_KEK
 
-	afterAll(async () => {
-		process.env.KEYGRIP_KEK = realKek
-		await redisClient.close().catch(() => undefined)
-	})
+  afterAll(async () => {
+    process.env.KEYGRIP_KEK = realKek
+    await redisClient.close().catch(() => undefined)
+  })
 
-	it('logs the mismatch, tears down Redis, and exits 1', async () => {
-		// Well-formed and 32 bytes, so the length guard passes and the failure is the one being tested:
-		// the record's tag does not verify under this key.
-		process.env.KEYGRIP_KEK = randomBytes(32).toString('base64')
+  it('logs the mismatch, tears down Redis, and exits 1', async () => {
+    // Well-formed and 32 bytes, so the length guard passes and the failure is the one being tested:
+    // the record's tag does not verify under this key.
+    process.env.KEYGRIP_KEK = randomBytes(32).toString('base64')
 
-		const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
-		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
 
-		try {
-			await expect(start()).resolves.toBeUndefined()
+    try {
+      await expect(start()).resolves.toBeUndefined()
 
-			// The message an admin reads at 3am. It names the failure and the record, and — deliberately
-			// — no key material: this line goes to a boot log.
-			const [, error] = errorLog.mock.calls.find(([label]) => label === 'error') as [string, Error]
-			expect(error.message).toMatch(/^KEYGRIP_KEK_MISMATCH: this service cannot unwrap keygrip record version 1 \(\w{12}\)\./)
+      // The message an admin reads at 3am. It names the failure and the record, and — deliberately
+      // — no key material: this line goes to a boot log.
+      const [, error] = errorLog.mock.calls.find(([label]) => label === 'error') as [string, Error]
+      expect(error.message).toMatch(/^KEYGRIP_KEK_MISMATCH: this service cannot unwrap keygrip record version 1 \(\w{12}\)\./)
 
-			expect(exit).toHaveBeenCalledWith(1)
+      expect(exit).toHaveBeenCalledWith(1)
 
-			// ⚠️ Nothing is left running. Redis had come up — loadKeygrip runs after the connect — so this
-			// proves the teardown covers the half-booted process, not just the one that never connected.
-			// This service holds no MongoDB connection at all: sessions live in Redis and nothing else does.
-			expect(redisClient.isOpen).toBe(false)
-		} finally {
-			exit.mockRestore()
-			errorLog.mockRestore()
-		}
-	})
+      // ⚠️ Nothing is left running. Redis had come up — loadKeygrip runs after the connect — so this
+      // proves the teardown covers the half-booted process, not just the one that never connected.
+      // This service holds no MongoDB connection at all: sessions live in Redis and nothing else does.
+      expect(redisClient.isOpen).toBe(false)
+    } finally {
+      exit.mockRestore()
+      errorLog.mockRestore()
+    }
+  })
 })

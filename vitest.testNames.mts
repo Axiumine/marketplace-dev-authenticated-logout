@@ -23,18 +23,18 @@ import { beforeEach } from 'vitest'
 const MAX_TEST_NAME_LENGTH = 256
 
 beforeEach(({ task }) => {
-	// Built exactly as Stryker builds it (`collectTestName` in @stryker-mutator/vitest-runner): every
-	// enclosing suite, outermost first, then the test, joined with one space. That string is what goes into
-	// the pattern, so that string is what is measured.
-	const parts = [task.name]
-	for (let suite = task.suite; suite !== undefined; suite = suite.suite) parts.unshift(suite.name)
-	const name = parts.join(' ').trim()
+  // Built exactly as Stryker builds it (`collectTestName` in @stryker-mutator/vitest-runner): every
+  // enclosing suite, outermost first, then the test, joined with one space. That string is what goes into
+  // the pattern, so that string is what is measured.
+  const parts = [task.name]
+  for (let suite = task.suite; suite !== undefined; suite = suite.suite) parts.unshift(suite.name)
+  const name = parts.join(' ').trim()
 
-	if (name.length > MAX_TEST_NAME_LENGTH) {
-		throw new Error(
-			`Test name is ${String(name.length)} characters; the cap is ${String(MAX_TEST_NAME_LENGTH)}. An \`.each\` row ` +
-				'is probably formatting an object into it: lead the row with a short label and format that. Why the ' +
-				`cap exists: vitest.testNames.mts. The name starts: ${name.slice(0, 160)}`
-		)
-	}
+  if (name.length > MAX_TEST_NAME_LENGTH) {
+    throw new Error(
+      `Test name is ${String(name.length)} characters; the cap is ${String(MAX_TEST_NAME_LENGTH)}. An \`.each\` row ` +
+        'is probably formatting an object into it: lead the row with a short label and format that. Why the ' +
+        `cap exists: vitest.testNames.mts. The name starts: ${name.slice(0, 160)}`
+    )
+  }
 })

@@ -32,19 +32,19 @@ import { TIER } from '@axiumine/marketplace-common/others/Tier'
  * life is spent with this field pointing at a key that is already gone.
  */
 export const REFRESH_SESSION: IRefreshData = {
-	_id: '507f1f77bcf86cd799439011',
-	tier: TIER.user,
-	familyId: '3f2a1d9c-6b7e-4c1a-9f0d-2e5b8c4a7d13',
-	originalLogin: '1754784000000',
-	sessionCapDays: '30',
-	accessKey: `${process.env.REDIS_KEY}5e1c7a94b0d23f68ae5c1074b9d3f2a6c8e04b17d92a5f3c6e8b0147a2d9c5f3`
+  _id: '507f1f77bcf86cd799439011',
+  tier: TIER.user,
+  familyId: '3f2a1d9c-6b7e-4c1a-9f0d-2e5b8c4a7d13',
+  originalLogin: '1754784000000',
+  sessionCapDays: '30',
+  accessKey: `${process.env.REDIS_KEY}5e1c7a94b0d23f68ae5c1074b9d3f2a6c8e04b17d92a5f3c6e8b0147a2d9c5f3`
 }
 
 /** The access-token session hash for a customer, as `setRedisLoginSessionUser` writes it. */
 export const ACCESS_SESSION: IRedisDataUser = {
-	_id: '507f1f77bcf86cd799439011',
-	email: 'customer@marketplace.test',
-	tier: TIER.user
+  _id: '507f1f77bcf86cd799439011',
+  email: 'customer@marketplace.test',
+  tier: TIER.user
 }
 
 /**
@@ -54,7 +54,7 @@ export const ACCESS_SESSION: IRedisDataUser = {
  * interfaces, and an interface has no index signature to assign from.
  */
 export const asHash = (session: IRefreshData | IRedisDataUser): Record<string, string> => ({
-	...(session as unknown as Record<string, string>)
+  ...(session as unknown as Record<string, string>)
 })
 
 /**
@@ -64,8 +64,8 @@ export const asHash = (session: IRefreshData | IRedisDataUser): Record<string, s
  * identity one populated, `exists` answering 1, and the one lookup the logout handler makes still missing.
  */
 export const refreshSessionWithoutIdentity = (): Record<string, string> => {
-	const hash = asHash(REFRESH_SESSION)
-	delete hash._id
+  const hash = asHash(REFRESH_SESSION)
+  delete hash._id
 
-	return hash
+  return hash
 }

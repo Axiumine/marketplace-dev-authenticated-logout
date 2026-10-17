@@ -23,7 +23,7 @@ vi.mock('@sentry/node', () => ({ captureException }))
 let logout: (typeof import('../src/graphQLApi/schema/mutations/logout.mts'))['logout']
 
 beforeAll(async () => {
-	;({ logout } = await import('../src/graphQLApi/schema/mutations/logout.mts'))
+  ;({ logout } = await import('../src/graphQLApi/schema/mutations/logout.mts'))
 })
 
 /*
@@ -62,191 +62,191 @@ const BOUND_ACCESS_KEY = 'test:9f6d3a1c0b7e45d28c1a5f0e3b9d47a6c2e8f10b4d7a93c65
 
 // minimal ctx: the resolver only uses state.user and cookies.set
 function makeCtx(user: { refreshToken?: string; accessToken?: string }) {
-	return {
-		state: { user },
-		cookies: { set: vi.fn() }
-	} as unknown as IContextLogout & { cookies: { set: ReturnType<typeof vi.fn> } }
+  return {
+    state: { user },
+    cookies: { set: vi.fn() }
+  } as unknown as IContextLogout & { cookies: { set: ReturnType<typeof vi.fn> } }
 }
 
 describe('mutations.logout', () => {
-	beforeEach(() => {
-		del.mockReset()
-		hDel.mockReset()
-		incr.mockReset()
-		captureException.mockReset()
-		// The session this logout is ending, under the hashed key shape. Every test needs one: the resolver
-		// reads the hash before it deletes anything, and a resolver told there is no session unfiles nothing.
-		hGetAll.mockReset()
-		hGetAll.mockResolvedValue(SESSION_HASH)
-	})
+  beforeEach(() => {
+    del.mockReset()
+    hDel.mockReset()
+    incr.mockReset()
+    captureException.mockReset()
+    // The session this logout is ending, under the hashed key shape. Every test needs one: the resolver
+    // reads the hash before it deletes anything, and a resolver told there is no session unfiles nothing.
+    hGetAll.mockReset()
+    hGetAll.mockResolvedValue(SESSION_HASH)
+  })
 
-	it('is of non-nullable Boolean type', () => {
-		expect(logout.type).toBeInstanceOf(GraphQLNonNull)
-		expect((logout.type as GraphQLNonNull<typeof GraphQLBoolean>).ofType).toBe(GraphQLBoolean)
-	})
+  it('is of non-nullable Boolean type', () => {
+    expect(logout.type).toBeInstanceOf(GraphQLNonNull)
+    expect((logout.type as GraphQLNonNull<typeof GraphQLBoolean>).ofType).toBe(GraphQLBoolean)
+  })
 
-	it('describes itself as "logout"', () => {
-		expect(logout.description).toBe('logout')
-	})
+  it('describes itself as "logout"', () => {
+    expect(logout.description).toBe('logout')
+  })
 
-	it('deletes the refresh session and empties the cookie', async () => {
-		const ctx = makeCtx({ refreshToken: 'refresh:abc' })
+  it('deletes the refresh session and empties the cookie', async () => {
+    const ctx = makeCtx({ refreshToken: 'refresh:abc' })
 
-		await expect(logout.resolve(null, {}, ctx)).resolves.toBe(true)
+    await expect(logout.resolve(null, {}, ctx)).resolves.toBe(true)
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
-		expect(ctx.cookies.set).toHaveBeenCalledWith('refresh_token', '', expect.any(Object))
-	})
+    expect(del.mock.calls).toEqual([[REFRESH_KEY]])
+    expect(ctx.cookies.set).toHaveBeenCalledWith('refresh_token', '', expect.any(Object))
+  })
 
-	it('also deletes the access session when present', async () => {
-		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
+  it('also deletes the access session when present', async () => {
+    await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY]])
-	})
+    expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY]])
+  })
 
-	it('does not delete the access session if the token is an empty string', async () => {
-		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: '' }))
+  it('does not delete the access session if the token is an empty string', async () => {
+    await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: '' }))
 
-		// Both refresh shapes and neither access shape — the count alone would now pass on a resolver that
-		// deleted the access session under one shape and skipped the refresh one.
-		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
-	})
+    // Both refresh shapes and neither access shape — the count alone would now pass on a resolver that
+    // deleted the access session under one shape and skipped the refresh one.
+    expect(del.mock.calls).toEqual([[REFRESH_KEY]])
+  })
 
-	/*
-	 * ⚠️ **The whole of the access-key residual, at the logout end of it.** `authorizationLogoutHandler` leaves
-	 * `accessToken` unset whenever the presented token's session is already gone — the ordinary state of a
-	 * tab that has not refreshed since another one did, because a rotation kills the access token it
-	 * replaces. Every name this resolver could once reach for was then absent, and the *live* access token
-	 * — the one the last refresh minted — outlived the logout meant to end it: in no family, in no index
-	 * row, named by nothing anyone could ask for. The session records its key now, so it goes too.
-	 */
-	it('retires the access key the session records even when the call presented no live token', async () => {
-		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: BOUND_ACCESS_KEY })
+  /*
+   * ⚠️ **The whole of the access-key residual, at the logout end of it.** `authorizationLogoutHandler` leaves
+   * `accessToken` unset whenever the presented token's session is already gone — the ordinary state of a
+   * tab that has not refreshed since another one did, because a rotation kills the access token it
+   * replaces. Every name this resolver could once reach for was then absent, and the *live* access token
+   * — the one the last refresh minted — outlived the logout meant to end it: in no family, in no index
+   * row, named by nothing anyone could ask for. The session records its key now, so it goes too.
+   */
+  it('retires the access key the session records even when the call presented no live token', async () => {
+    hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: BOUND_ACCESS_KEY })
 
-		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
+    await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], [BOUND_ACCESS_KEY]])
-	})
+    expect(del.mock.calls).toEqual([[REFRESH_KEY], [BOUND_ACCESS_KEY]])
+  })
 
-	// A header naming a *different* access token than the session does — an older one, presented by a tab
-	// that has not refreshed since. Both are this session's, so both go: following only one leaves the
-	// other alive, and which one that is depends on which tab happened to send the logout.
-	it('retires both the bound access key and a presented token that names another', async () => {
-		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: BOUND_ACCESS_KEY })
+  // A header naming a *different* access token than the session does — an older one, presented by a tab
+  // that has not refreshed since. Both are this session's, so both go: following only one leaves the
+  // other alive, and which one that is depends on which tab happened to send the logout.
+  it('retires both the bound access key and a presented token that names another', async () => {
+    hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: BOUND_ACCESS_KEY })
 
-		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
+    await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY], [BOUND_ACCESS_KEY]])
-	})
+    expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY], [BOUND_ACCESS_KEY]])
+  })
 
-	// The ordinary logout: the header names the very token the session recorded. One name, one delete —
-	// the `Set` is what keeps this path from paying a third round trip on every logout on the platform.
-	it('issues no extra delete when the bound key and the presented token name the same session', async () => {
-		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: ACCESS_KEY })
+  // The ordinary logout: the header names the very token the session recorded. One name, one delete —
+  // the `Set` is what keeps this path from paying a third round trip on every logout on the platform.
+  it('issues no extra delete when the bound key and the presented token name the same session', async () => {
+    hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: ACCESS_KEY })
 
-		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
+    await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc', accessToken: 'access:xyz' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY]])
-	})
+    expect(del.mock.calls).toEqual([[REFRESH_KEY], [ACCESS_KEY]])
+  })
 
-	// An empty field would delete the bare prefix — the key nothing owns and everything on this platform
-	// is stored under a suffix of. Guarded for the same reason the empty access token above is.
-	it('deletes nothing extra when the session records an empty access key', async () => {
-		hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: '' })
+  // An empty field would delete the bare prefix — the key nothing owns and everything on this platform
+  // is stored under a suffix of. Guarded for the same reason the empty access token above is.
+  it('deletes nothing extra when the session records an empty access key', async () => {
+    hGetAll.mockResolvedValue({ ...SESSION_HASH, accessKey: '' })
 
-		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))
+    await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))
 
-		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
-	})
+    expect(del.mock.calls).toEqual([[REFRESH_KEY]])
+  })
 
-	/*
-	 * ⚠️ **The read comes first and the unfiling comes last, and neither position is free.** The hash is
-	 * deleted by the same resolver, so anything it has to say about the account has to be asked for before
-	 * that; and unfiling before the delete would leave a still-usable refresh token listed nowhere for the
-	 * width of the window between the two calls, which is precisely when a revocation would miss it.
-	 */
-	it('unfiles the session from its account index, once the keys it names are gone', async () => {
-		await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))
+  /*
+   * ⚠️ **The read comes first and the unfiling comes last, and neither position is free.** The hash is
+   * deleted by the same resolver, so anything it has to say about the account has to be asked for before
+   * that; and unfiling before the delete would leave a still-usable refresh token listed nowhere for the
+   * width of the window between the two calls, which is precisely when a revocation would miss it.
+   */
+  it('unfiles the session from its account index, once the keys it names are gone', async () => {
+    await logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))
 
-		expect(hGetAll).toHaveBeenCalledExactlyOnceWith(REFRESH_KEY)
-		expect(hDel.mock.calls).toEqual([[INDEX_KEY, REFRESH_DIGEST]])
-		expect(hGetAll.mock.invocationCallOrder[0]).toBeLessThan(Math.min(...del.mock.invocationCallOrder))
-		expect(hDel.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...del.mock.invocationCallOrder))
-	})
+    expect(hGetAll).toHaveBeenCalledExactlyOnceWith(REFRESH_KEY)
+    expect(hDel.mock.calls).toEqual([[INDEX_KEY, REFRESH_DIGEST]])
+    expect(hGetAll.mock.invocationCallOrder[0]).toBeLessThan(Math.min(...del.mock.invocationCallOrder))
+    expect(hDel.mock.invocationCallOrder[0]).toBeGreaterThan(Math.max(...del.mock.invocationCallOrder))
+  })
 
-	/*
-	 * A session minted before the index existed carries no tier and no `_id`, and was never filed
-	 * under anything. The fields are checked rather than assumed because the alternative is not a harmless
-	 * miss: `undefined` reaches a template as the word `undefined`, so the unguarded call would delete a
-	 * field from `test:idx:undefined:undefined` — a key one future writer away from being real.
-	 */
-	it.each([
-		['no tier at all', { _id: ACCOUNT_ID }],
-		['a tier no collection mints', { _id: ACCOUNT_ID, tier: 'root' }],
-		['no account id', { tier: 'shopOwner' }],
-		['nothing at all — the key missed', {}]
-	])('unfiles nothing when the session hash carries %s', async (_label, hash) => {
-		hGetAll.mockResolvedValue(hash)
+  /*
+   * A session minted before the index existed carries no tier and no `_id`, and was never filed
+   * under anything. The fields are checked rather than assumed because the alternative is not a harmless
+   * miss: `undefined` reaches a template as the word `undefined`, so the unguarded call would delete a
+   * field from `test:idx:undefined:undefined` — a key one future writer away from being real.
+   */
+  it.each([
+    ['no tier at all', { _id: ACCOUNT_ID }],
+    ['a tier no collection mints', { _id: ACCOUNT_ID, tier: 'root' }],
+    ['no account id', { tier: 'shopOwner' }],
+    ['nothing at all — the key missed', {}]
+  ])('unfiles nothing when the session hash carries %s', async (_label, hash) => {
+    hGetAll.mockResolvedValue(hash)
 
-		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
+    await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).resolves.toBe(true)
 
-		// The keys still go: a session that is not in the index is still a session being ended.
-		expect(del.mock.calls).toEqual([[REFRESH_KEY]])
-		expect(hDel).not.toHaveBeenCalled()
-	})
+    // The keys still go: a session that is not in the index is still a session being ended.
+    expect(del.mock.calls).toEqual([[REFRESH_KEY]])
+    expect(hDel).not.toHaveBeenCalled()
+  })
 
-	/*
-	 * ⚠️ **The whole point of B19.** A Redis failure during teardown used to be swallowed into Sentry with
-	 * the mutation still answering `true` — telling the caller the session was gone while `del` had just
-	 * failed. It must now surface as a rejection, still go to Sentry, AND still clear the cookie: none of
-	 * the three is optional, and each is asserted on its own so a fix that only does two of them fails here.
-	 */
-	it('reports a teardown failure to Sentry and rejects, instead of answering true', async () => {
-		const error = new Error('redis down')
-		del.mockRejectedValueOnce(error)
-		const ctx = makeCtx({ refreshToken: 'refresh:abc' })
+  /*
+   * ⚠️ **The whole point of B19.** A Redis failure during teardown used to be swallowed into Sentry with
+   * the mutation still answering `true` — telling the caller the session was gone while `del` had just
+   * failed. It must now surface as a rejection, still go to Sentry, AND still clear the cookie: none of
+   * the three is optional, and each is asserted on its own so a fix that only does two of them fails here.
+   */
+  it('reports a teardown failure to Sentry and rejects, instead of answering true', async () => {
+    const error = new Error('redis down')
+    del.mockRejectedValueOnce(error)
+    const ctx = makeCtx({ refreshToken: 'refresh:abc' })
 
-		await expect(logout.resolve(null, {}, ctx)).rejects.toThrow('Internal Server Error')
+    await expect(logout.resolve(null, {}, ctx)).rejects.toThrow('Internal Server Error')
 
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(error)
-	})
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(error)
+  })
 
-	// The cookie is the one side effect that must survive a Redis outage: a shared device must never keep
-	// a live refresh_token cookie because teardown failed. Attributes matter too — a hand-written options
-	// literal here would strand the cookie, which is why the resolver reuses `refreshTokenOptions`.
-	it('still clears the refresh cookie, with the options that set it, when teardown fails', async () => {
-		del.mockRejectedValueOnce(new Error('redis down'))
-		const ctx = makeCtx({ refreshToken: 'refresh:abc' })
+  // The cookie is the one side effect that must survive a Redis outage: a shared device must never keep
+  // a live refresh_token cookie because teardown failed. Attributes matter too — a hand-written options
+  // literal here would strand the cookie, which is why the resolver reuses `refreshTokenOptions`.
+  it('still clears the refresh cookie, with the options that set it, when teardown fails', async () => {
+    del.mockRejectedValueOnce(new Error('redis down'))
+    const ctx = makeCtx({ refreshToken: 'refresh:abc' })
 
-		await expect(logout.resolve(null, {}, ctx)).rejects.toThrow()
+    await expect(logout.resolve(null, {}, ctx)).rejects.toThrow()
 
-		const { refreshTokenOptions } = await import('@axiumine/koa-utils/lib/tokenOptions')
-		expect(ctx.cookies.set).toHaveBeenCalledExactlyOnceWith('refresh_token', '', refreshTokenOptions)
-	})
+    const { refreshTokenOptions } = await import('@axiumine/koa-utils/lib/tokenOptions')
+    expect(ctx.cookies.set).toHaveBeenCalledExactlyOnceWith('refresh_token', '', refreshTokenOptions)
+  })
 
-	// A failure anywhere in the teardown — not only on the first `del` — takes the same path: the read, the
-	// unindex and the access-key deletes are exercised elsewhere in this file, so only the failure branch
-	// itself needs covering here.
-	it('rejects on a failure from the session read too, not only from a delete', async () => {
-		hGetAll.mockRejectedValueOnce(new Error('redis down'))
+  // A failure anywhere in the teardown — not only on the first `del` — takes the same path: the read, the
+  // unindex and the access-key deletes are exercised elsewhere in this file, so only the failure branch
+  // itself needs covering here.
+  it('rejects on a failure from the session read too, not only from a delete', async () => {
+    hGetAll.mockRejectedValueOnce(new Error('redis down'))
 
-		await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).rejects.toThrow('Internal Server Error')
-	})
+    await expect(logout.resolve(null, {}, makeCtx({ refreshToken: 'refresh:abc' }))).rejects.toThrow('Internal Server Error')
+  })
 })
 
 describe('MutationsApi', () => {
-	// Imported fresh inside the test, not via the shared beforeAll above: the
-	// `name: 'MutationsApi'` literal and the object literal it lives in are
-	// asserted eagerly by graphql-js (assertName) the moment GraphQLObjectType is
-	// constructed, so a mutant that blanks either one makes THIS import throw.
-	// Sharing that import with other tests via a beforeAll would turn the throw
-	// into a hook failure — Vitest marks every test in the hook's scope "skipped",
-	// not "failed", and Stryker only counts a "failed" test as a kill. An import
-	// inside the test body fails only this test, which Stryker does attribute.
-	it('mounts logout as its only field', async () => {
-		const { default: MutationsApi } = await import('../src/graphQLApi/schema/mutations.mts')
+  // Imported fresh inside the test, not via the shared beforeAll above: the
+  // `name: 'MutationsApi'` literal and the object literal it lives in are
+  // asserted eagerly by graphql-js (assertName) the moment GraphQLObjectType is
+  // constructed, so a mutant that blanks either one makes THIS import throw.
+  // Sharing that import with other tests via a beforeAll would turn the throw
+  // into a hook failure — Vitest marks every test in the hook's scope "skipped",
+  // not "failed", and Stryker only counts a "failed" test as a kill. An import
+  // inside the test body fails only this test, which Stryker does attribute.
+  it('mounts logout as its only field', async () => {
+    const { default: MutationsApi } = await import('../src/graphQLApi/schema/mutations.mts')
 
-		expect(MutationsApi.name).toBe('MutationsApi')
-		expect(Object.keys(MutationsApi.getFields())).toEqual(['logout'])
-	})
+    expect(MutationsApi.name).toBe('MutationsApi')
+    expect(Object.keys(MutationsApi.getFields())).toEqual(['logout'])
+  })
 })

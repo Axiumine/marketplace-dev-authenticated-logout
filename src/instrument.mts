@@ -65,46 +65,46 @@ import * as Sentry from '@sentry/node'
  * hook wired, switching on a `tracesSampleRate` would switch the redaction off.
  */
 if (process.env.DSN) {
-	Sentry.init({
-		dsn: process.env.DSN,
-		// Absent, this reads `production` on every stack — measured, on a service that had just
-		// logged "for development" — and Dev events land in the bucket the production alerts are built on.
-		// The fallback is `unknown` rather than `development`: an unset `NODE_ENV` on a real deployment
-		// would otherwise be labelled the one thing it is least likely to be, which is the same defect
-		// pointing the other way. Everything else in the process reads the same variable and treats
-		// anything that is not `production` as not production.
-		environment: process.env.NODE_ENV ?? 'unknown',
-		// This is the gate on the request body, and the only one: see the note above. It goes
-		// through `httpIntegration` because that is the integration the SDK installs by default under the
-		// name `Http`, and a user instance of the same name replaces it. `maxIncomingRequestBodySize` is
-		// its spelling of the option `httpServerIntegration` reads as `maxRequestBodySize`.
-		integrations: [Sentry.httpIntegration({ maxIncomingRequestBodySize: 'none' })],
-		dataCollection: {
-			// The client address is a network-derived value this platform does not capture; this
-			// is the switch that stops the SDK inferring one from the forwarding headers for `event.user`.
-			userInfo: false,
-			cookies: false,
-			httpHeaders: { request: false, response: false },
-			// `[]` is the documented "collect no bodies" value, and it holds for the span attribute alone —
-			// the event body is stopped by `maxIncomingRequestBodySize` above. An omitted key would
-			// collect all four.
-			httpBodies: [],
-			urlQueryParams: false,
-			// The document keeps its literal values redacted at collection time, so the query shape, the
-			// transaction name and the stack still arrive and nothing needed for debugging is lost. The
-			// variables are a different thing: on this surface they *are* the passwords and the personal
-			// data, which is what the envelope body would have carried.
-			graphQL: { document: true, variables: false },
-			genAI: { inputs: false, outputs: false },
-			databaseQueryData: false,
-			// A resolver frame can hold a decrypted document or a resolved token, and the SDK's name-based
-			// filtering matches post-bundling identifiers rather than the ones written here.
-			stackFrameVariables: false,
-			// 7, not the DEFAULTS 5: both branches of the legacy mapping use 7 because the ContextLines
-			// integration does, so this keeps stack context exactly as it is today.
-			frameContextLines: 7
-		},
-		beforeSend: sentryBeforeSend,
-		beforeSendTransaction: sentryBeforeSend
-	})
+  Sentry.init({
+    dsn: process.env.DSN,
+    // Absent, this reads `production` on every stack — measured, on a service that had just
+    // logged "for development" — and Dev events land in the bucket the production alerts are built on.
+    // The fallback is `unknown` rather than `development`: an unset `NODE_ENV` on a real deployment
+    // would otherwise be labelled the one thing it is least likely to be, which is the same defect
+    // pointing the other way. Everything else in the process reads the same variable and treats
+    // anything that is not `production` as not production.
+    environment: process.env.NODE_ENV ?? 'unknown',
+    // This is the gate on the request body, and the only one: see the note above. It goes
+    // through `httpIntegration` because that is the integration the SDK installs by default under the
+    // name `Http`, and a user instance of the same name replaces it. `maxIncomingRequestBodySize` is
+    // its spelling of the option `httpServerIntegration` reads as `maxRequestBodySize`.
+    integrations: [Sentry.httpIntegration({ maxIncomingRequestBodySize: 'none' })],
+    dataCollection: {
+      // The client address is a network-derived value this platform does not capture; this
+      // is the switch that stops the SDK inferring one from the forwarding headers for `event.user`.
+      userInfo: false,
+      cookies: false,
+      httpHeaders: { request: false, response: false },
+      // `[]` is the documented "collect no bodies" value, and it holds for the span attribute alone —
+      // the event body is stopped by `maxIncomingRequestBodySize` above. An omitted key would
+      // collect all four.
+      httpBodies: [],
+      urlQueryParams: false,
+      // The document keeps its literal values redacted at collection time, so the query shape, the
+      // transaction name and the stack still arrive and nothing needed for debugging is lost. The
+      // variables are a different thing: on this surface they *are* the passwords and the personal
+      // data, which is what the envelope body would have carried.
+      graphQL: { document: true, variables: false },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      // A resolver frame can hold a decrypted document or a resolved token, and the SDK's name-based
+      // filtering matches post-bundling identifiers rather than the ones written here.
+      stackFrameVariables: false,
+      // 7, not the DEFAULTS 5: both branches of the legacy mapping use 7 because the ContextLines
+      // integration does, so this keeps stack context exactly as it is today.
+      frameContextLines: 7
+    },
+    beforeSend: sentryBeforeSend,
+    beforeSendTransaction: sentryBeforeSend
+  })
 }

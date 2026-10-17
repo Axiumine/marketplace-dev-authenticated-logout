@@ -36,21 +36,21 @@ const ACCESS_RAW_KEY = 'test:access:xyz'
  * Answers exactly as Redis would: an absent field is `null`, not `undefined`.
  */
 const hGetFromWrittenSession = async (key: string, field: string) => {
-	const hashes: Record<string, Record<string, string>> = {
-		[REFRESH_KEY]: asHash(REFRESH_SESSION),
-		[ACCESS_KEY]: asHash(ACCESS_SESSION)
-	}
+  const hashes: Record<string, Record<string, string>> = {
+    [REFRESH_KEY]: asHash(REFRESH_SESSION),
+    [ACCESS_KEY]: asHash(ACCESS_SESSION)
+  }
 
-	return hashes[key]?.[field] ?? null
+  return hashes[key]?.[field] ?? null
 }
 
 // Cookie signed the way Koa emits it: value + `.sig` cookie holding the Keygrip signature.
 function signedCookie(token = REFRESH) {
-	return `refresh_token=${token}; refresh_token.sig=${keys.sign(`refresh_token=${token}`)}`
+  return `refresh_token=${token}; refresh_token.sig=${keys.sign(`refresh_token=${token}`)}`
 }
 
 function makeCtx(header?: Record<string, string>) {
-	return { request: { header }, state: {} } as unknown as IContextLogout
+  return { request: { header }, state: {} } as unknown as IContextLogout
 }
 
 // `rejects.toThrow()` is too weak here: every wrong path in this handler throws *something*
@@ -60,166 +60,166 @@ const NO_AUTH_COOKIE = 'No authorization cookie.'
 const NO_AUTH_HEADER = 'No authorization header.'
 
 function expectRejectionDescription(promise: Promise<unknown>, description: string) {
-	return expect(promise).rejects.toMatchObject({
-		message: 'Precondition Failed',
-		extensions: { http: { status: 412 }, description }
-	})
+  return expect(promise).rejects.toMatchObject({
+    message: 'Precondition Failed',
+    extensions: { http: { status: 412 }, description }
+  })
 }
 
 describe('authorizationLogoutHandler', () => {
-	let next: Next
+  let next: Next
 
-	beforeEach(() => {
-		hGet.mockReset()
-		next = vi.fn().mockResolvedValue('next') as unknown as Next
-	})
+  beforeEach(() => {
+    hGet.mockReset()
+    next = vi.fn().mockResolvedValue('next') as unknown as Next
+  })
 
-	/*
-	 * The resolution two tests below end with, written once. Both send the same request — a signed cookie
-	 * and a Bearer — and both expect the same four things of a handler that found the session: it passes the
-	 * request on, it reached Redis once per session and on the hashed key both times, the raw shape is never
-	 * named, and both tokens land on `ctx.state.user`.
-	 *
-	 * What differs between the two callers is only what `hGet` was told to answer before this runs, and that
-	 * stays at the call site: one hands it two ids, the other hands it the hashes a real login writes. Every
-	 * assertion is still made in both cases — the helper is called, not shared setup, so a caller that
-	 * skipped it would visibly assert nothing.
-	 */
-	const expectBothSessionsResolved = async () => {
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+  /*
+   * The resolution two tests below end with, written once. Both send the same request — a signed cookie
+   * and a Bearer — and both expect the same four things of a handler that found the session: it passes the
+   * request on, it reached Redis once per session and on the hashed key both times, the raw shape is never
+   * named, and both tokens land on `ctx.state.user`.
+   *
+   * What differs between the two callers is only what `hGet` was told to answer before this runs, and that
+   * stays at the call site: one hands it two ids, the other hands it the hashes a real login writes. Every
+   * assertion is still made in both cases — the helper is called, not shared setup, so a caller that
+   * skipped it would visibly assert nothing.
+   */
+  const expectBothSessionsResolved = async () => {
+    const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
+    await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
 
-		expect(hGet.mock.calls).toEqual([
-			[REFRESH_KEY, '_id'],
-			[ACCESS_KEY, '_id']
-		])
-		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
-	}
+    expect(hGet.mock.calls).toEqual([
+      [REFRESH_KEY, '_id'],
+      [ACCESS_KEY, '_id']
+    ])
+    expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}`, accessToken: 'access:xyz' })
+  }
 
-	// AB-04: a request carrying no credential is refused
-	it('rejects the request without a cookie', async () => {
-		const ctx = makeCtx({ authorization: 'Bearer access:xyz' })
+  // AB-04: a request carrying no credential is refused
+  it('rejects the request without a cookie', async () => {
+    const ctx = makeCtx({ authorization: 'Bearer access:xyz' })
 
-		await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_COOKIE)
-		expect(next).not.toHaveBeenCalled()
-	})
+    await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_COOKIE)
+    expect(next).not.toHaveBeenCalled()
+  })
 
-	// No header object at all: the cookie guard must be the one that fires. Every mutant that
-	// drops `?.` or the `typeof header !== 'undefined'` short-circuit turns this into a TypeError,
-	// and every mutant that skips the cookie check lets it fall through to the *header* error.
-	it('rejects with the cookie error when the request carries no headers at all', async () => {
-		const ctx = makeCtx()
+  // No header object at all: the cookie guard must be the one that fires. Every mutant that
+  // drops `?.` or the `typeof header !== 'undefined'` short-circuit turns this into a TypeError,
+  // and every mutant that skips the cookie check lets it fall through to the *header* error.
+  it('rejects with the cookie error when the request carries no headers at all', async () => {
+    const ctx = makeCtx()
 
-		await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_COOKIE)
-		expect(hGet).not.toHaveBeenCalled()
-		expect(next).not.toHaveBeenCalled()
-	})
+    await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_COOKIE)
+    expect(hGet).not.toHaveBeenCalled()
+    expect(next).not.toHaveBeenCalled()
+  })
 
-	it('rejects the request without an authorization header', async () => {
-		const ctx = makeCtx({ cookie: signedCookie() })
+  it('rejects the request without an authorization header', async () => {
+    const ctx = makeCtx({ cookie: signedCookie() })
 
-		await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_HEADER)
-		expect(next).not.toHaveBeenCalled()
-	})
+    await expectRejectionDescription(authorizationLogoutHandler(keys)(ctx, next), NO_AUTH_HEADER)
+    expect(next).not.toHaveBeenCalled()
+  })
 
-	// AB-05: a credential of the wrong shape is refused — a bad scheme, a broken signature
-	it('rejects a cookie with an invalid signature', async () => {
-		const ctx = makeCtx({
-			cookie: `refresh_token=${REFRESH}; refresh_token.sig=fake-signature`,
-			authorization: 'Bearer access:xyz'
-		})
+  // AB-05: a credential of the wrong shape is refused — a bad scheme, a broken signature
+  it('rejects a cookie with an invalid signature', async () => {
+    const ctx = makeCtx({
+      cookie: `refresh_token=${REFRESH}; refresh_token.sig=fake-signature`,
+      authorization: 'Bearer access:xyz'
+    })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
-		expect(hGet).not.toHaveBeenCalled()
-	})
+    await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
+    expect(hGet).not.toHaveBeenCalled()
+  })
 
-	// AB-01: a valid credential is accepted and the session it resolves reaches ctx.state.user
-	it('fills state.user with both tokens when the sessions exist', async () => {
-		hGet.mockResolvedValueOnce('refresh-session-id').mockResolvedValueOnce('access-session-id')
+  // AB-01: a valid credential is accepted and the session it resolves reaches ctx.state.user
+  it('fills state.user with both tokens when the sessions exist', async () => {
+    hGet.mockResolvedValueOnce('refresh-session-id').mockResolvedValueOnce('access-session-id')
 
-		await expectBothSessionsResolved()
-	})
+    await expectBothSessionsResolved()
+  })
 
-	/*
-	 * ⚠️ **The inverted raw-key test.** The fixture is unchanged — both halves of a session
-	 * sitting under the pre-cutover raw keys, and nothing under either digest — and the answer flips: the
-	 * handler finds no refresh session, so the logout is `throwAlreadyDone` rather than a revocation.
-	 *
-	 * This service is the one that used to have the strongest case for the fallback, since a logout that
-	 * misses leaves a live credential behind after telling the user they are out. What removes the case is
-	 * that no session of this shape can exist: the cutover was never deployed, and every writer hashes.
-	 * Both raw keys are still seeded here so that a reintroduced fallback fails loudly.
-	 */
-	it('refuses a session written under the raw keys, and reads neither of them', async () => {
-		hGet.mockImplementation(async (key: string) => (key === REFRESH_RAW_KEY || key === ACCESS_RAW_KEY ? 'session-id' : null))
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+  /*
+   * ⚠️ **The inverted raw-key test.** The fixture is unchanged — both halves of a session
+   * sitting under the pre-cutover raw keys, and nothing under either digest — and the answer flips: the
+   * handler finds no refresh session, so the logout is `throwAlreadyDone` rather than a revocation.
+   *
+   * This service is the one that used to have the strongest case for the fallback, since a logout that
+   * misses leaves a live credential behind after telling the user they are out. What removes the case is
+   * that no session of this shape can exist: the cutover was never deployed, and every writer hashes.
+   * Both raw keys are still seeded here so that a reintroduced fallback fails loudly.
+   */
+  it('refuses a session written under the raw keys, and reads neither of them', async () => {
+    hGet.mockImplementation(async (key: string) => (key === REFRESH_RAW_KEY || key === ACCESS_RAW_KEY ? 'session-id' : null))
+    const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
+    await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
 
-		expect(hGet.mock.calls).toEqual([[REFRESH_KEY, '_id']])
-		expect(next).not.toHaveBeenCalled()
-	})
+    expect(hGet.mock.calls).toEqual([[REFRESH_KEY, '_id']])
+    expect(next).not.toHaveBeenCalled()
+  })
 
-	it('proceeds without accessToken if the access session has already expired', async () => {
-		hGet.mockResolvedValueOnce('refresh-session-id').mockResolvedValueOnce(null)
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+  it('proceeds without accessToken if the access session has already expired', async () => {
+    hGet.mockResolvedValueOnce('refresh-session-id').mockResolvedValueOnce(null)
+    const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
-		expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}` })
-	})
+    await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
+    expect(ctx.state.user).toEqual({ refreshToken: `refresh:${REFRESH}` })
+  })
 
-	it('does not query the access session if the Bearer is empty', async () => {
-		hGet.mockResolvedValueOnce('refresh-session-id')
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer ' })
+  it('does not query the access session if the Bearer is empty', async () => {
+    hGet.mockResolvedValueOnce('refresh-session-id')
+    const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer ' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
-		expect(hGet.mock.calls).toEqual([[REFRESH_KEY, '_id']])
-	})
+    await expect(authorizationLogoutHandler(keys)(ctx, next)).resolves.toBe('next')
+    expect(hGet.mock.calls).toEqual([[REFRESH_KEY, '_id']])
+  })
 
-	/*
-	 * ⚠️ **The regression test for the `_id` read, and the only one in this file the reader cannot satisfy by
-	 * agreeing with itself.** The mock answers out of `REFRESH_SESSION` and `ACCESS_SESSION` — the hashes
-	 * `IRefreshData` and `IRedisDataUser` describe, which is what the four writers actually put in Redis —
-	 * so the field this handler asks for has to be a field a login really writes. Ask for `id`, as this
-	 * service once did, and both reads miss, `throwAlreadyDone` fires, and the assertions below
-	 * fail instead of passing against a hash shaped to order.
-	 *
-	 */
-	it('finds the session inside a hash written the way the login writers write it', async () => {
-		hGet.mockImplementation(hGetFromWrittenSession)
+  /*
+   * ⚠️ **The regression test for the `_id` read, and the only one in this file the reader cannot satisfy by
+   * agreeing with itself.** The mock answers out of `REFRESH_SESSION` and `ACCESS_SESSION` — the hashes
+   * `IRefreshData` and `IRedisDataUser` describe, which is what the four writers actually put in Redis —
+   * so the field this handler asks for has to be a field a login really writes. Ask for `id`, as this
+   * service once did, and both reads miss, `throwAlreadyDone` fires, and the assertions below
+   * fail instead of passing against a hash shaped to order.
+   *
+   */
+  it('finds the session inside a hash written the way the login writers write it', async () => {
+    hGet.mockImplementation(hGetFromWrittenSession)
 
-		await expectBothSessionsResolved()
-	})
+    await expectBothSessionsResolved()
+  })
 
-	/*
-	 * The same hash, minus the one field the handler reads. `tier`, `familyId`, `originalLogin` and
-	 * `sessionCapDays` are all still there, so the key exists and `hGetAll` would return a session — and
-	 * the logout still refuses, because a hash without an identity is not one this service can revoke.
-	 * This is the failure the platform was living with: found for every other purpose, invisible to logout.
-	 */
-	it('refuses a refresh hash that carries every field except the identity', async () => {
-		const withoutIdentity = refreshSessionWithoutIdentity()
+  /*
+   * The same hash, minus the one field the handler reads. `tier`, `familyId`, `originalLogin` and
+   * `sessionCapDays` are all still there, so the key exists and `hGetAll` would return a session — and
+   * the logout still refuses, because a hash without an identity is not one this service can revoke.
+   * This is the failure the platform was living with: found for every other purpose, invisible to logout.
+   */
+  it('refuses a refresh hash that carries every field except the identity', async () => {
+    const withoutIdentity = refreshSessionWithoutIdentity()
 
-		hGet.mockImplementation(async (key: string, field: string) =>
-			key === REFRESH_KEY ? (withoutIdentity[field] ?? null) : null
-		)
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+    hGet.mockImplementation(async (key: string, field: string) =>
+      key === REFRESH_KEY ? (withoutIdentity[field] ?? null) : null
+    )
+    const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		// 204 with an empty message and description — `throwAlreadyDone`, the answer a second logout gets.
-		// Asserted rather than a bare `toThrow()`: every wrong path in this handler throws something.
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toMatchObject({
-			extensions: { http: { status: 204 } }
-		})
-		expect(next).not.toHaveBeenCalled()
-	})
+    // 204 with an empty message and description — `throwAlreadyDone`, the answer a second logout gets.
+    // Asserted rather than a bare `toThrow()`: every wrong path in this handler throws something.
+    await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toMatchObject({
+      extensions: { http: { status: 204 } }
+    })
+    expect(next).not.toHaveBeenCalled()
+  })
 
-	// AB-06: a credential whose session is gone from Redis is refused
-	it('rejects if the refresh session no longer exists in Redis', async () => {
-		hGet.mockResolvedValueOnce(null)
-		const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
+  // AB-06: a credential whose session is gone from Redis is refused
+  it('rejects if the refresh session no longer exists in Redis', async () => {
+    hGet.mockResolvedValueOnce(null)
+    const ctx = makeCtx({ cookie: signedCookie(), authorization: 'Bearer access:xyz' })
 
-		await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
-		expect(next).not.toHaveBeenCalled()
-	})
+    await expect(authorizationLogoutHandler(keys)(ctx, next)).rejects.toThrow()
+    expect(next).not.toHaveBeenCalled()
+  })
 })
