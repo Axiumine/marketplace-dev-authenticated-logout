@@ -51,7 +51,7 @@
     "lodash": "^4.18.1",
     "redis": "^6.2.0",
     "reflect-metadata": "^0.2.2",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@axiumine/eslint-config-be": "^2.0.2",
