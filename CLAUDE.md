@@ -30,6 +30,7 @@ every pull request — two callers, both automated, and a hand is neither.
   missing test. Bypasses (`SKIP_QODANA=1`, `--no-verify`) are gate removals: use only when the user says so.
 - Two spaces, not tabs (ADR-058). prettier enforces it (`useTabs: false`, `tabWidth: 2`); eslint's `indent` is `['error', 2]` in the test/vitest block.
 - English only — identifiers, comments, fixtures. No exception.
+- `osv-scanner.toml` ignores GHSA-vfj7-8cjw-p6xm (braces, no patched release, dev toolchain only) until 2027-01-15 under ADR-057. The entry expires on purpose, so the failure after that date is the review: delete the entry once a patched braces exists.
 - Domain query/mutation → **resource** svc. Token lifecycle → **authorization** svc.
 - **Run `impact({target, repo})` before editing a symbol and `detect_changes()` before committing**;
   `repo:` is mandatory and must be `marketplace-dev-authenticated-logout`.
