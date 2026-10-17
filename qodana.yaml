@@ -20,23 +20,25 @@ image: jetbrains/qodana-js:2026.2
 
 # ── SCA: third-party license audit (Ultimate Plus) ────────────────────────────
 # Scans npm/Yarn deps and surfaces license conflicts as problems. The project is
-# proprietary (package.json "UNLICENSED"), so Qodana's default compatibility
-# matrix already flags copyleft dependencies. Tighten per-project below if needed.
+# GPL-3.0-or-later (package.json "license", LICENSE); licenseRules below sets which
+# dependency licenses are accepted against it. Tighten per-project below if needed.
 raiseLicenseProblems: true
 
 # `keys` is THIS project's license, `allowed` the dependency licenses accepted
-# against it. The default matrix for a proprietary project flags every copyleft
-# dep as a Critical — correct for shipped software, wrong here: these services are
-# never distributed, they run on our own hosts behind nginx, so the GPL's
-# distribution trigger is never pulled. Accepted by the project owner.
+# against it. While the project was still declared UNLICENSED, the default matrix for
+# a proprietary project flagged every copyleft dep as a Critical — correct for shipped
+# software, wrong here: these services are never distributed, they run on our own hosts
+# behind nginx, so the GPL's distribution trigger is never pulled. Accepted by the
+# project owner; the allow-list below is what kept that decision once the project
+# became GPL-3.0-or-later.
 #
 # Deliberately NOT `dependencyIgnores: - name: "@axiumine/koa-utils"`. That key
 # drops a package from the whole SCA pass, so a future CVE in it would be silenced
 # along with the license noise. This suppresses only the license verdict and keeps
 # vulnerable-dependency scanning fully armed.
 #
-# `keys` must carry the key Qodana derives, NOT the package.json string: it maps
-# "UNLICENSED" to PROPRIETARY-LICENSE, and the finding text says so verbatim —
+# `keys` must carry the key Qodana derives, NOT the package.json string: it mapped
+# "UNLICENSED" to PROPRIETARY-LICENSE, and the finding text said so verbatim —
 # "…is in the prohibited licenses list with project license 'PROPRIETARY-LICENSE'".
 # Putting "UNLICENSED" here matches no project and the rule silently does nothing.
 #
