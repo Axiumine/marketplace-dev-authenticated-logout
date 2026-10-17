@@ -1,0 +1,10 @@
+# Accepted risk, recorded in ADR-057 (parent repo, docs/devprotocol/phase3/adr/). Read it before editing this file.
+# braces <= 3.0.3 has no patched release: npm's latest is 3.0.3 and the advisory's last affected version is 3.0.3.
+# Here it is reachable only through devDependencies (glob matching in the lint, test and mutation toolchain), never from the shipped code.
+# The entry expires on ignoreUntil. After that date the Scorecard Vulnerabilities check and the pre-push floor gate fail again on purpose:
+# that failure is the review. Re-check for a patched release, then renew with a new date and a new look at the ADR, or delete the entry.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-15
+reason = "braces <= 3.0.3 stack exhaustion (CVE-2026-93687); no patched release exists; dev toolchain only, absent from the production tree. ADR-057."

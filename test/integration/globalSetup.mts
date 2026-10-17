@@ -15,5 +15,5 @@ import { seedKeygrip } from '../../vitest.keygrip.mts'
  * `setupFiles` module runs inside an already-forked worker and could not hand the key to the others.
  */
 export async function setup(): Promise<void> {
-	await seedKeygrip()
+  await seedKeygrip()
 }

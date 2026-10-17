@@ -28,7 +28,7 @@ export const ITEST_REDIS_KEY = 'marketplaceDev:itest:authenticatedLogout:'
  * its own.
  */
 export const ITEST_KEYGRIP_KEYS = [
-	{ id: 'itest-k1', material: Buffer.alloc(64, 42).toString('base64'), createdAt: '2026-08-12T00:00:00.000Z' }
+  { id: 'itest-k1', material: Buffer.alloc(64, 42).toString('base64'), createdAt: '2026-08-12T00:00:00.000Z' }
 ]
 
 /**
@@ -47,18 +47,18 @@ export const ITEST_KEYGRIP_KEYS = [
  * needs to predict it, so nothing should be able to.
  */
 export async function seedKeygrip(): Promise<void> {
-	const kek = randomBytes(32)
-	process.env.KEYGRIP_KEK = kek.toString('base64')
+  const kek = randomBytes(32)
+  process.env.KEYGRIP_KEK = kek.toString('base64')
 
-	await RedisConnect()
-	try {
-		await redisClient.hSet(`${ITEST_REDIS_KEY}keygrip`, {
-			version: '1',
-			wrapped: wrapKeygripKeys(ITEST_KEYGRIP_KEYS, 1, kek),
-			fp: keygripFingerprint(ITEST_KEYGRIP_KEYS)
-		})
-	} finally {
-		// This process only provisions; every test file opens its own client.
-		await redisClient.close().catch(() => undefined)
-	}
+  await RedisConnect()
+  try {
+    await redisClient.hSet(`${ITEST_REDIS_KEY}keygrip`, {
+      version: '1',
+      wrapped: wrapKeygripKeys(ITEST_KEYGRIP_KEYS, 1, kek),
+      fp: keygripFingerprint(ITEST_KEYGRIP_KEYS)
+    })
+  } finally {
+    // This process only provisions; every test file opens its own client.
+    await redisClient.close().catch(() => undefined)
+  }
 }

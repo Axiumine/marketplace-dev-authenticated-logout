@@ -32,13 +32,13 @@ const here = dirname(fileURLToPath(import.meta.url))
 const suite = SUITE_FILES.map((file) => readFileSync(join(here, file), 'utf8')).join('\n')
 
 describe('the auth-boundary contract', () => {
-	it.each(requiredAuthBoundaryCases(SERVICE).map((id) => [id]))('%s is tagged in this service’s boundary suite', (id) => {
-		expect(suite).toContain(`// ${id}:`)
-	})
+  it.each(requiredAuthBoundaryCases(SERVICE).map((id) => [id]))('%s is tagged in this service’s boundary suite', (id) => {
+    expect(suite).toContain(`// ${id}:`)
+  })
 
-	// The suite files are read, not globbed, so an empty read would pass every assertion above vacuously.
-	it('read a boundary suite that is actually there', () => {
-		expect(suite.length).toBeGreaterThan(0)
-		expect(requiredAuthBoundaryCases(SERVICE).length).toBeGreaterThan(0)
-	})
+  // The suite files are read, not globbed, so an empty read would pass every assertion above vacuously.
+  it('read a boundary suite that is actually there', () => {
+    expect(suite.length).toBeGreaterThan(0)
+    expect(requiredAuthBoundaryCases(SERVICE).length).toBeGreaterThan(0)
+  })
 })
