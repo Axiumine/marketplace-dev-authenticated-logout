@@ -13,7 +13,7 @@ aggregate=6.6
 
 Binary-Artifacts=10
 Branch-Protection=3
-CI-Tests=10
+CI-Tests=-1
 CII-Best-Practices=0
 Code-Review=0
 Contributors=0
