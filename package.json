@@ -46,7 +46,7 @@
     "graphql": "^16.14.2",
     "graphql-depth-limit": "^1.1.0",
     "keygrip": "^1.1.0",
-    "koa": "^3.2.1",
+    "koa": "^3.3.0",
     "koa-bodyparser": "^4.4.1",
     "lodash": "^4.18.1",
     "redis": "^6.3.0",
