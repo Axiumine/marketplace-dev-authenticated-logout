@@ -45,12 +45,41 @@ import { describe, expect, it } from 'vitest'
  * `@sentry/opentelemetry` and `@sentry/server-utils` exactly, so they move in lockstep and join the list below; the
  * `opentelemetry` change is the same URL filtering. Read from both releases' published tarballs, whose hashes match the
  * lockfile and the registry, and measured end to end (docs/report/sentry-10-76-2-url-query-capture.md).
+ *
+ * 10.76.2 → 10.78.0 is the third bump this guard caught, and unlike the first two nothing in the audited surface
+ * changed at all. Two releases lie between the pins, 10.77.1 and 10.78.0; 10.77.0 was never published. Every file the
+ * claims above rest on is byte-identical between 10.76.2 and 10.78.0, in the esm and cjs builds and in the types where
+ * a file has them: `DEFAULTS` (the same hash) and the base-selection line in `resolveDataCollectionOptions`,
+ * `defaultPiiToCollectionOptions`, `filtering-snippets`, `filterKeyValueData`, `filterCookies`, `filterCollectedUrl`,
+ * `filterUrlQuery`, `filterQueryParams`, `types/datacollection`, `utils/request`, core's `requestdata` integration and
+ * its `data: true`, core's `server-subscription` (the `"none"` test on the body size), node-core's
+ * `httpServerIntegration`, `httpServerSpansIntegration` and `http/index`, and `@sentry/node`'s own
+ * `integrations/http.js`, the file where `maxIncomingRequestBodySize` is renamed to `maxRequestBodySize`, which this
+ * guard had not named before. No `dataCollection` category or option was added: the eleven keys of the type are the
+ * same, which is the change that would have mattered most. What did change is span lifecycle, client-report accounting
+ * and packaging, and none of it reads or filters a body, a header, a cookie, a client address or a query string. A
+ * response that closes without finishing now ends an Express layer span with status `cancelled` (core
+ * `express/patch-layer`, and server-utils' Express instrumentation); an aborted outgoing HTTP or undici request ends
+ * its span without the error status; core counts dropped spans, removes one dropped-item client report from `scope`,
+ * maps the metric category to `trace_metric`, drops the `previous_response_id` fallback of the OpenAI conversation id,
+ * changes one SQL regex, and caps the tunnel handler at 20 MiB, a handler `src/instrument.mts` never configures. A
+ * sampled-out error is now dropped before the event processors run, which cannot apply while no `sampleRate` is set.
+ * node-core's ContextLines now reads only files with a source extension, so `frameContextLines: 7` can only yield less
+ * context, never more, and `.mts` frames still match; its `modules` integration, in the cjs build only, now resolves
+ * versions on the pnpm and Bun layouts. `@sentry/node` pins `@sentry/core`, `@sentry/node-core`,
+ * `@sentry/opentelemetry` and `@sentry/server-utils` exactly, to 10.78.0 as it pinned them to 10.76.2, so all five
+ * move in lockstep, as they did at 10.76.2: `opentelemetry` changed only in its version and a peer range,
+ * `server-utils` only in the Express listener above. Dependency ranges tightened and no package was added or removed:
+ * `@opentelemetry/api` is now `>=1.9.1 <1.10.0`, and node-core's `@opentelemetry/instrumentation` and
+ * `@opentelemetry/exporter-trace-otlp-http` peers stop below 0.300.0. Read from the published tarballs of all five
+ * packages at both releases; no end-to-end replay was run for this bump, so the reading is the evidence, and the
+ * measurement in docs/report/sentry-10-76-2-url-query-capture.md was not repeated.
  */
 
-const PINNED = '10.76.2'
+const PINNED = '10.78.0'
 
 const MIGRATION =
-  'the Sentry SDK moved off 10.76.2. Re-read `resolveDataCollectionOptions`, `httpServerSpansIntegration` and `httpServerIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from. `maxIncomingRequestBodySize` defaults to `"medium"` and the default is the defect — check the name still forwards to `httpServerIntegration`s `maxRequestBodySize`, and that `include.data` on the requestdata integration is still what makes the body an event field.'
+  'the Sentry SDK moved off 10.78.0. Re-read `resolveDataCollectionOptions`, `httpServerSpansIntegration` and `httpServerIntegration` before trusting `src/instrument.mts`, then update the observability section of `docs/architecture.md`, which records what each `dataCollection` category replaced. v11 removes the blanket PII flag that mapping starts from. `maxIncomingRequestBodySize` defaults to `"medium"` and the default is the defect — check the name still forwards to `httpServerIntegration`s `maxRequestBodySize`, and that `include.data` on the requestdata integration is still what makes the body an event field.'
 
 const installedVersion = async (name: string): Promise<string> => {
   const manifest = await readFile(new URL(`../node_modules/@sentry/${name}/package.json`, import.meta.url), 'utf8')
