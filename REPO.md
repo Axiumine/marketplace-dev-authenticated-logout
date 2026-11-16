@@ -66,9 +66,10 @@ swallowed.
 ## Node selection
 
 Ahead of every gate the hook selects node, reading `engines.node` from `package.json` and switching via
-nvm. The gates shell out to yarn and yarn's `engines` check is a hard exit 1, so without it a push from
-a shell on the machine default node dies *before* the first gate, under that gate's banner — which is
-how a node mismatch first read as a type error. Every repo's `pre-push` carries that block, and so does
+nvm. Yarn 4 does not enforce `engines` (yarn classic's check was a hard exit 1, and nothing took over), so
+this selection is the only enforcement: without it a push from a shell on the machine default node runs
+every gate on the wrong runtime, and fails, if it fails, under that gate's banner — which is how a node
+mismatch first read as a type error. Every repo's `pre-push` carries that block, and so does
 every `pre-commit`, since all of them run tests.
 
 ## Bypasses

@@ -155,13 +155,17 @@ fi
 # other fifteen did not — a rule in one hook is a rule in one repo, which is the drift §8 of
 # `./scripts/audit-check.sh` now refuses for paths the way it already did for values. Neither costs
 # anything: of the 2845 tracked files in the sixteen repos, none matches either, measured.
-SECRET_PATH='(^|/)(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc(\.yml)?|\.netrc|\.pgpass|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json|service-account.*\.json)$|(^|/)setup/mongodb\.js$|\.(pem|key|p12|pfx|jks)$'
+SECRET_PATH='(^|/)(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc|\.netrc|\.pgpass|id_rsa|id_dsa|id_ecdsa|id_ed25519|credentials\.json|service-account.*\.json)$|(^|/)setup/mongodb\.js$|\.(pem|key|p12|pfx|jks)$'
 # Anything under a `secrets/` directory, whatever it is called. `marketplace-docker-DBs/secrets/` holds
 # the replica-set keyfile, the CSFLE master key and now the generated Redis config, and the last of
 # those is a plain-text file with no extension and no telltale name. The directory is git-ignored, so
 # this rule only ever fires on a deliberate `git add -f` — which is exactly the case worth stopping.
 # Nothing in these sixteen repos tracks a path with that segment, so it can cost nothing else.
 SECRET_PATH+='|(^|/)secrets/'
+# Yarn 4's `.yarnrc.yml` is committed on purpose (nodeLinker and the like) and so is let through by
+# path above; its content is refused instead. It is also where a registry credential would go, so the
+# loop below reads the whole staged file for one of these keys, at any indent, quoted or not.
+YARNRC_CREDENTIAL='^[[:space:]]*["'"'"']?(npmAuthToken|npmAuthIdent|npmPassword|_auth|_authToken|_password)["'"'"']?[[:space:]]*:'
 
 # Vendored secret-scanner rulesets legitimately contain example secret patterns.
 SKIP_PATH='(^|/)(semgrep/vendor|gitleaks|trufflehog|\.gitnexus)/'
@@ -228,6 +232,21 @@ while IFS= read -r f; do
 	fi
 done <<< "$staged"
 
+# The staged blob, whole file: a credential on a line this commit did not touch is still in the commit.
+# Read into a variable and matched with a here-string, not piped into `grep -q` — the pipe would die of
+# SIGPIPE under `pipefail` and a failed `git show` would read as "no credential"; here it fails closed.
+while IFS= read -r f; do
+	[ -n "$f" ] || continue
+	[ "${f##*/}" = '.yarnrc.yml' ] || continue
+	if ! yarnrc_blob="$(git show ":$f")"; then
+		echo "pre-commit: refusing $f: could not read the staged blob to check it for a registry credential." >&2
+		fail=1
+	elif grep -Eq "$YARNRC_CREDENTIAL" <<< "$yarnrc_blob"; then
+		echo "pre-commit: refusing $f: it carries a registry credential key (npmAuthToken, npmAuthIdent, npmPassword, _auth…). Those belong in ~/.yarnrc.yml, never in the repository." >&2
+		fail=1
+	fi
+done <<< "$staged"
+
 while IFS= read -r f; do
 	[ -n "$f" ] || continue
 	# Added lines only, with the diff's leading '+' stripped so ^-anchors work.
@@ -254,6 +273,11 @@ fi
 # The published tarball is unaffected — `files: ["dist"]` keeps yarn.lock out of
 # it — so clones are the only casualty, and they fail at install with no hint of
 # why.
+#
+# Under Yarn 4 it matches nothing, by construction: a Yarn 4 lockfile has no
+# `resolved` line (its `resolution: "pkg@npm:1.2.3"` carries no host), so there is
+# no registry URL for a mirror to leak into. It stays as the backstop for a
+# lockfile that is still, or has gone back to, Yarn 1 format.
 #
 # Inspect the index (`:yarn.lock`), not the working tree — a clone that opted in
 # keeps mirror URLs there by design. Checked unconditionally rather than only
@@ -297,17 +321,16 @@ Every \`resolved\` URL must be public in git — https://registry.npmjs.org/, or
 yarn's own default https://registry.yarnpkg.com — or clones without access to
 the host above cannot install.
 
-The clean filter strips a mirror automatically, but it is opt-in and off by
-default, and it takes the host from yarn: \`yarn install\` (prepare ->
-hooks:install) records whatever \`yarn config get registry\` reports. If that is
-already the host above, one install is all it needs:
+A Yarn 4 lockfile records no registry URL, so this one is still in Yarn 1 format.
+Re-resolve it with the pinned Yarn (packageManager in package.json) and stage it:
 
-    yarn hooks:install
-    touch yarn.lock && git add yarn.lock
+    yarn install
+    git add yarn.lock
 
-Already opted in? Then \`git config --get yarnlock-registry.mirror\` disagrees
-with the host above — yarn was pointed somewhere else after the record was made,
-and the filter only ever strips the one it was given.
+The clean filter strips a mirror only when this clone recorded one, and only that
+one host. Yarn 4 no longer reports its registry to hooks:install, so the record is
+made by hand: \`git config yarnlock-registry.mirror <host>\`. Already recorded?
+Then \`git config --get yarnlock-registry.mirror\` disagrees with the host above.
 
 Not using a mirror at all? Then something else resolved this lockfile against
 that host — re-resolve it against the public registry and stage the result.
@@ -411,11 +434,11 @@ gate_block() {
 	exit 1
 }
 
-# `engines.node` is a HARD gate under yarn classic — a mismatch exits 1 with
-# `The engine "node" is incompatible with this module`, not a warning — and this
-# machine's default node is older than the pin. Read the requirement from
-# package.json rather than hard-coding it, so bumping the engine in one place
-# cannot leave the hook testing on a version nothing else uses.
+# Yarn 4 does not enforce `engines.node` at all — yarn classic exited 1 on a mismatch, and
+# nothing else took over — so this check is the enforcement, and this machine's default
+# node is older than the pin. Read the requirement from package.json rather than
+# hard-coding it, so bumping the engine in one place cannot leave the hook testing on a
+# version nothing else uses.
 REQUIRED_NODE="$(node -p 'require("./package.json").engines.node' 2> /dev/null | tr -d '^~>= ')"
 
 # An empty value here means node is not on PATH at all, which is a different failure from the
@@ -449,13 +472,13 @@ if ! node_satisfies; then
 fi
 
 if ! node_satisfies; then
-	gate_block "node $(node -v 2> /dev/null || echo '(not found)') does not satisfy engines.node ^$REQUIRED_NODE — yarn refuses to run at all." \
+	gate_block "node $(node -v 2> /dev/null || echo '(not found)') does not satisfy engines.node ^$REQUIRED_NODE — the gates below would run on the wrong runtime." \
 		"nvm install $REQUIRED_NODE && nvm use $REQUIRED_NODE"
 fi
 
 if ! command -v yarn > /dev/null 2>&1; then
 	gate_block 'yarn not found in PATH — cannot run the lint, type-check or coverage gates.' \
-		'npm i -g yarn@1.22.22'
+		'corepack enable'
 fi
 
 echo 'pre-commit: checking lint and formatting (yarn lint:check)…'

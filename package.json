@@ -18,7 +18,7 @@
     "typecheck": "tsc -p tsconfig.test.json",
     "lint": "eslint --fix . && prettier --write .",
     "lint:check": "eslint . && prettier --check .",
-    "update": "yarn upgrade-interactive --latest --network-timeout 100000",
+    "update": "yarn upgrade-interactive",
     "dev": "tsc && npx tsx watch --import ./src/instrument.mts src/index.mts",
     "build": "yarn clean && tsc && tsc-alias",
     "start": "node --import ./dist/instrument.mjs dist/index.mjs",
@@ -28,12 +28,12 @@
     "semgrep:ci": "docker run --rm --network none -e HOME=/tmp -u \"$(id -u):$(id -g)\" -v \"$PWD\":/src -w /src semgrep/semgrep:1.172.0 semgrep scan --metrics=off --disable-version-check --scan-unknown-extensions --error --sarif --output semgrep.sarif --config semgrep/ $(find src -type f \\( -name '*.mts' -o -name '*.cts' -o -name '*.ts' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.js' \\))",
     "qodana": "./qodana.sh",
     "hooks:install": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks && ./scripts/lockfile-registry-filter.sh install || true",
-    "prepare": "yarn run hooks:install"
+    "postinstall": "yarn run hooks:install"
   },
   "engines": {
     "node": "^24.18.0"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "packageManager": "yarn@4.18.1+sha512.b2e1e7524f654f2749d32b4ebcb4622473cb5bcbc485df2007e12a154e50162a4d795526768bc5f5b8f81717bfd79deb2472813d86fb5ae2eb551fa9c872b08f",
   "type": "module",
   "dependencies": {
     "@apollo/server": "^5.5.1",

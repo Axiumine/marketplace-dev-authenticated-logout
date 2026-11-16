@@ -15,14 +15,14 @@
 # a deleted dead branch, or — for a provably equivalent mutant — a documented
 # `// Stryker disable next-line <Mutator>: <why>`. See COVERAGE.md.
 #
-# Ahead of all eight: node. Every gate that shells out to yarn meets `engines.node`, a
-# HARD gate under yarn classic — a mismatch exits 1 with `The engine "node" is
-# incompatible with this module`, not a warning. Without the switch below, a push
-# from a shell on the machine default node dies before the first gate, under
-# whatever banner that gate prints, which is never what went wrong.
+# Ahead of all eight: node. Yarn 4 does not enforce `engines.node` — yarn classic exited 1
+# on a mismatch, and nothing else took over — so the check below is the enforcement.
+# Without the switch below, a push from a shell on the machine default node runs every
+# gate on the wrong runtime and fails, if it fails, under whatever banner that gate
+# prints, which is never what went wrong.
 #
 # Enabled by `git config core.hooksPath .githooks`, which the package.json
-# `prepare` script sets automatically on `yarn install`.
+# `postinstall` script sets automatically on `yarn install`.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -88,8 +88,8 @@ PUSH BLOCKED — wrong node.
 
 node $(node -v 2> /dev/null || echo '(not found)') does not satisfy engines.node ^$REQUIRED_NODE, and nvm could
 not be used to switch — either it is not installed at \${NVM_DIR:-\$HOME/.nvm}/nvm.sh
-or that version is not installed. yarn refuses to run at all in this state, so
-none of the eight gates below could report anything.
+or that version is not installed. The eight gates below would all run on the
+wrong runtime, so none of what they reported could be trusted.
 
 Fix it with:
 
@@ -114,7 +114,7 @@ None of the gates below could run: every one of them shells out to yarn.
 
 Fix it with:
 
-    npm i -g yarn@1.22.22
+    corepack enable
 
 then push again.
 ────────────────────────────────────────────────────────────────────────────
@@ -240,9 +240,10 @@ fi
 # profile file and in no scan log this workspace has ever produced. A security
 # check that cannot report is indistinguishable from a passing one.
 #
-# Not `yarn audit`: yarn 1 aborts the entire run over the unpublished
-# @axiumine/marketplace-common, and `npm audit` needs a package-lock.json this
-# workspace does not have. Trivy reads yarn.lock natively.
+# Not `yarn audit`: under yarn 1 it aborted the entire run over the unpublished
+# @axiumine/marketplace-common (`yarn npm audit` under Yarn 4 was not tried), and
+# `npm audit` needs a package-lock.json this workspace does not have. Trivy reads
+# yarn.lock natively, Yarn 4 format included.
 #
 # ⚠️ It suppresses devDependencies by default, and that is the property that makes
 # this gate keepable rather than the one everybody learns to bypass: an advisory
@@ -571,7 +572,7 @@ In order:
   1. Read the check that fell and its reason, above. The same result with the
      documentation for every check is at
      https://scorecard.dev/viewer/?uri=<owner>/<repo>
-  2. Restore the control that regressed. A dependency advisory is `yarn upgrade`;
+  2. Restore the control that regressed. A dependency advisory is `yarn up`;
      a workflow that came unpinned needs its SHA back; branch protection lives on
      GitHub, not in this tree.
   3. Raise the floor only when a check genuinely improved and you want the new

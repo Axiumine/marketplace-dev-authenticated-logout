@@ -83,18 +83,18 @@ jobs:
       # reads — the one input to a security gate that a contributor could choose.
       # A cold install costs well under a minute; the gates below cost minutes.
 
-      # packageManager pins yarn 1.22.22 in every package.json; corepack is what
+      # packageManager pins yarn 4.18.1 in every package.json; corepack is what
       # honours it, so the runner uses the same yarn the hooks do.
       - name: Enable corepack
         run: corepack enable
 
-      # --frozen-lockfile is the point: an install that may rewrite yarn.lock proves
-      # nothing about the lockfile under review. The committed lockfile carries
-      # registry.npmjs.org URLs (scripts/lockfile-registry-filter.sh rewrites the
-      # local proxy out on the way into git), so this resolves from the public
-      # registry with no configuration.
+      # --immutable is the point: an install that may rewrite yarn.lock proves
+      # nothing about the lockfile under review. A Yarn 4 lockfile carries no
+      # registry URL, so the lockfile filter (scripts/lockfile-registry-filter.sh)
+      # has nothing to rewrite and this resolves from the public registry with no
+      # configuration.
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       # Not every package declares every script: marketplace-db-setup has neither
       # eslint nor prettier nor TypeScript by design (ADR-024, its content is applied
