@@ -99,9 +99,8 @@ jobs:
 
       # --immutable is the point: an install that may rewrite yarn.lock proves
       # nothing about the lockfile under review. A Yarn 4 lockfile carries no
-      # registry URL, so the lockfile filter (scripts/lockfile-registry-filter.sh)
-      # has nothing to rewrite and this resolves from the public registry with no
-      # configuration.
+      # registry URL, so nothing needs rewriting out of it and this resolves from
+      # the public registry with no configuration.
       - name: Install dependencies
         run: yarn install --immutable
 

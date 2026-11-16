@@ -263,12 +263,9 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Backstop for the yarn.lock clean filter (scripts/lockfile-registry-filter.sh).
-# That filter is opt-in and does not exist unless this clone recorded a mirror,
-# so on most machines there is nothing at all between a mirrored lockfile and the
-# index except this check. Where it is configured it strips the mirror host on
-# the way in; where it is not — or where it was handed a different host from the
-# one that resolved the lockfile — the committed lockfile carries a registry that
+# Backstop for a Yarn 1 lockfile that resolves against a non-public registry.
+# A Yarn 1 lockfile records a `resolved` URL for every entry, so one resolved
+# through a mirror, a VPN-only cache or a rewritten uplink carries a registry that
 # resolves on one network only and breaks `yarn install` for every other clone.
 # The published tarball is unaffected — `files: ["dist"]` keeps yarn.lock out of
 # it — so clones are the only casualty, and they fail at install with no hint of
@@ -276,15 +273,16 @@ fi
 #
 # Under Yarn 4 it matches nothing, by construction: a Yarn 4 lockfile has no
 # `resolved` line (its `resolution: "pkg@npm:1.2.3"` carries no host), so there is
-# no registry URL for a mirror to leak into. It stays as the backstop for a
-# lockfile that is still, or has gone back to, Yarn 1 format.
+# no registry URL for a mirror to leak into, however the install was routed. A
+# mirror belongs in the per-machine ~/.yarnrc.yml (npmRegistryServer) and never
+# in a repository. This check stays as the gate for a lockfile that is still, or
+# has gone back to, Yarn 1 format.
 #
-# Inspect the index (`:yarn.lock`), not the working tree — a clone that opted in
-# keeps mirror URLs there by design. Checked unconditionally rather than only
-# when yarn.lock is staged: a tainted blob that happens to match HEAD produces
-# no staged diff, so a $STAGED-gated check would wave through exactly the state
-# it exists to catch. Absent from the index, `git show` fails and LOCK_INDEX is
-# empty.
+# Inspect the index (`:yarn.lock`), not the working tree: the index is what a
+# commit records. Checked unconditionally rather than only when yarn.lock is
+# staged: a tainted blob that happens to match HEAD produces no staged diff, so a
+# $STAGED-gated check would wave through exactly the state it exists to catch.
+# Absent from the index, `git show` fails and LOCK_INDEX is empty.
 #
 # Read into a variable instead of piping `git show` into `grep -q`: -q exits on
 # the first match, `git show` then dies of SIGPIPE, and `set -o pipefail` turns
@@ -295,12 +293,11 @@ LOCK_INDEX="$(git show :yarn.lock 2> /dev/null || true)"
 # Match on "not the public registry" rather than one hard-coded mirror host, so
 # any mirror, VPN-only cache or rewritten uplink is caught too.
 #
-# Two hosts pass, not one: registry.npmjs.org is what this lockfile is committed
-# with and what the clean filter rewrites to, but yarn 1's own default is
-# registry.yarnpkg.com — npm's CDN alias. Re-resolving the lockfile with stock
-# yarn config writes that host into all 510 lines, and blocking it would reject a
-# contributor who never touched a mirror at all. Both resolve for everyone, which
-# is the only thing this check is defending.
+# Two hosts pass, not one: registry.npmjs.org is the public registry, and yarn
+# 1's own default is registry.yarnpkg.com — npm's CDN alias. Re-resolving a Yarn 1
+# lockfile with stock yarn config writes that host into every entry, and blocking
+# it would reject a contributor who never touched a mirror at all. Both resolve
+# for everyone, which is the only thing this check is defending.
 FOREIGN_HOSTS="$(
 	printf '%s\n' "$LOCK_INDEX" \
 		| grep -oE '^[[:space:]]*resolved "https?://[^/"]+' \
@@ -327,13 +324,10 @@ Re-resolve it with the pinned Yarn (packageManager in package.json) and stage it
     yarn install
     git add yarn.lock
 
-The clean filter strips a mirror only when this clone recorded one, and only that
-one host. Yarn 4 no longer reports its registry to hooks:install, so the record is
-made by hand: \`git config yarnlock-registry.mirror <host>\`. Already recorded?
-Then \`git config --get yarnlock-registry.mirror\` disagrees with the host above.
-
-Not using a mirror at all? Then something else resolved this lockfile against
-that host — re-resolve it against the public registry and stage the result.
+A mirror belongs in the per-machine ~/.yarnrc.yml (npmRegistryServer), never in a
+repository, and a Yarn 4 lockfile never records it. If the host above is a mirror,
+this lockfile was not produced by the pinned Yarn 4: re-resolve it against the
+public registry and stage the result.
 
 EOF
 	exit 1
