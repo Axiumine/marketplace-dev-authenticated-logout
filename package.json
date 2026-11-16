@@ -81,6 +81,8 @@
     "vitest": "^4.1.10"
   },
   "resolutions": {
+    "minimatch@npm:^10.2.2": "^11.0.8",
+    "minimatch@npm:~10.2.4": "^11.0.8",
     "qs": "^6.15.2"
   }
 }
