@@ -20,7 +20,7 @@
 version: 2
 updates:
   - package-ecosystem: 'npm'
-    directory: '/'
+    directories: ['/', '/.github/tools']
     schedule:
       interval: 'weekly'
       day: 'saturday'

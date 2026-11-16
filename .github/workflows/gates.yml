@@ -84,9 +84,18 @@ jobs:
       # A cold install costs well under a minute; the gates below cost minutes.
 
       # packageManager pins yarn 4.18.1 in every package.json; corepack is what
-      # honours it, so the runner uses the same yarn the hooks do.
-      - name: Enable corepack
-        run: corepack enable
+      # honours it, so the runner uses the same yarn the hooks do. Node 25 stopped
+      # bundling corepack, so it comes from .github/tools, pinned by version and
+      # integrity in that package-lock.json and installed with `npm ci` outside the
+      # checkout. `npm ci` is what keeps Pinned-Dependencies at its floor: a bare
+      # `npm install -g corepack` is an unpinned download (ADR-054, ADR-059).
+      - name: Install corepack
+        run: |
+          cp .github/tools/package.json .github/tools/package-lock.json "$RUNNER_TEMP/"
+          npm ci --prefix "$RUNNER_TEMP" --ignore-scripts --no-audit --no-fund
+          mkdir -p "$RUNNER_TEMP/bin"
+          "$RUNNER_TEMP/node_modules/.bin/corepack" enable --install-directory "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       # --immutable is the point: an install that may rewrite yarn.lock proves
       # nothing about the lockfile under review. A Yarn 4 lockfile carries no

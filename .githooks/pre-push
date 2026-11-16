@@ -114,7 +114,7 @@ None of the gates below could run: every one of them shells out to yarn.
 
 Fix it with:
 
-    corepack enable
+    npm install -g corepack@0.36.0 && corepack enable
 
 then push again.
 ────────────────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
 . ~/.profile
 . ~/.bashrc
 
-nvm use "${NODE_VER:-v24.18.0}"
+nvm use "${NODE_VER:-v26.13.1}"
 node --version
 
 #install new ?
