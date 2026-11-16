@@ -71,9 +71,14 @@ raiseLicenseProblems: true
 # file landed, and Qodana derives the project key from that field — a rule keyed only on
 # PROPRIETARY-LICENSE now matches nothing, and a rule that matches no project does not fail: it
 # silently does nothing while the audit still reports green. `allowed` below is unchanged.
+# AGPL-3.0-or-later covers @axiumine/koa-utils from 9.0.0 on (platform owner's ruling, 2026-11-16). It is
+# one-way compatible with GPL-3.0-or-later: this service stays GPL-3.0-or-later, the combined work includes an
+# AGPL-3.0-or-later part, and section 13 of that licence (source offer to network users) applies to it.
+# The exception is for that licence only; it is not a general licence for copyleft dependencies.
 licenseRules:
   - keys: ['GPL-3.0-or-later', 'PROPRIETARY-LICENSE']
-    allowed: ['GPL-3.0-or-later', 'GPL-3.0-only', 'LGPL-3.0-or-later', 'LGPL-3.0-only', 'MPL-2.0', 'CC0-1.0']
+    allowed:
+      ['GPL-3.0-or-later', 'GPL-3.0-only', 'LGPL-3.0-or-later', 'LGPL-3.0-only', 'AGPL-3.0-or-later', 'MPL-2.0', 'CC0-1.0']
 
 # No dependencyOverrides here. There was one, for humanize-number 0.0.2, whose
 # package.json carries no license field at all — it had to be declared MIT by
