@@ -58,7 +58,7 @@
     "@eslint/eslintrc": "^3.3.6",
     "@eslint/js": "^10.0.1",
     "@stryker-mutator/core": "^9.6.1",
-    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/graphql-depth-limit": "^1.1.6",
     "@types/koa": "^3.0.3",
     "@types/koa-bodyparser": "^4.3.13",

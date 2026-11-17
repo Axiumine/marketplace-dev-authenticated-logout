@@ -2065,6 +2065,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@stryker-mutator/api@npm:10.1.1":
+  version: 10.1.1
+  resolution: "@stryker-mutator/api@npm:10.1.1"
+  dependencies:
+    mutation-testing-metrics: "npm:3.8.4"
+    mutation-testing-report-schema: "npm:3.8.4"
+    tslib: "npm:~2.8.0"
+    typed-inject: "npm:~5.0.0"
+  checksum: 10c0/0d357554e71c22226965e38f267796662ad757e9c94162eb2038ed86d3dfa2e423ee764f6843d07bbb377aa1682f2062a9aec98a96a88e0318fe5c7e9faa2d2d
+  languageName: node
+  linkType: hard
+
 "@stryker-mutator/api@npm:9.6.1":
   version: 9.6.1
   resolution: "@stryker-mutator/api@npm:9.6.1"
@@ -2133,6 +2145,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@stryker-mutator/util@npm:10.1.1":
+  version: 10.1.1
+  resolution: "@stryker-mutator/util@npm:10.1.1"
+  checksum: 10c0/14ff278714e1253118e76714b25f15b318b34a5319fd6b956f9d4c82d77a3b77f47e4e8ff797e2151191a699aa3fa7e2a4708e90a67d026854ae755df59404ef
+  languageName: node
+  linkType: hard
+
 "@stryker-mutator/util@npm:9.6.1":
   version: 9.6.1
   resolution: "@stryker-mutator/util@npm:9.6.1"
@@ -2140,18 +2159,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@stryker-mutator/vitest-runner@npm:^9.6.1":
-  version: 9.6.1
-  resolution: "@stryker-mutator/vitest-runner@npm:9.6.1"
+"@stryker-mutator/vitest-runner@npm:^10.1.1":
+  version: 10.1.1
+  resolution: "@stryker-mutator/vitest-runner@npm:10.1.1"
   dependencies:
-    "@stryker-mutator/api": "npm:9.6.1"
-    "@stryker-mutator/util": "npm:9.6.1"
+    "@stryker-mutator/api": "npm:10.1.1"
+    "@stryker-mutator/util": "npm:10.1.1"
     semver: "npm:^7.7.4"
     tslib: "npm:~2.8.0"
   peerDependencies:
-    "@stryker-mutator/core": 9.6.1
+    "@stryker-mutator/core": 10.1.1
     vitest: ">=2.0.0"
-  checksum: 10c0/6b7945b0b90c39107146287aa9bc694b0c6b8d01037adbb0b1985e00c0a6a8d631c6ab78f91a21346171fcd8b45328a147f4513803f65a5c3fe34dff68545e17
+  checksum: 10c0/47d7fddb6099d8c5c7857bd2b99d42853d5a2dc0d978706b228c90d5a794064901d337c0f2c19e96abed54520249675de425bb8b21af9b644bf997658214c2a0
   languageName: node
   linkType: hard
 
@@ -5244,10 +5263,26 @@ __metadata:
   languageName: node
   linkType: hard
 
+"mutation-testing-metrics@npm:3.8.4":
+  version: 3.8.4
+  resolution: "mutation-testing-metrics@npm:3.8.4"
+  dependencies:
+    mutation-testing-report-schema: "npm:3.8.4"
+  checksum: 10c0/5fb1378cb84afbe3f0e66f0946f9a55ef55eab2cc668467d65a68fa59fbf1b744b3ba74958a8160e7f4b28394ba91e6b51b3c3e2f5697fee87c50ac47b614adf
+  languageName: node
+  linkType: hard
+
 "mutation-testing-report-schema@npm:3.7.3":
   version: 3.7.3
   resolution: "mutation-testing-report-schema@npm:3.7.3"
   checksum: 10c0/5d72c27bc733efc0ac8d671f83316b8bb1b2a8f335400c54701f7a8d2a7117f7239025b2a7716cf18bece7b6fb10e13ff1dc58669a54d710bd0e6c05538ffb8d
+  languageName: node
+  linkType: hard
+
+"mutation-testing-report-schema@npm:3.8.4":
+  version: 3.8.4
+  resolution: "mutation-testing-report-schema@npm:3.8.4"
+  checksum: 10c0/e1e44669c39a85eaa4aad99465f51f6a752fa332034176ed3d48f1e55cc7deb39d0d01244e8b9c9caa3d5c9271603bdb08ced87131deca2228391dfd3517cf89
   languageName: node
   linkType: hard
 
@@ -5778,7 +5813,7 @@ __metadata:
     "@node-rs/bcrypt": "npm:^1.10.7"
     "@sentry/node": "npm:10.78.0"
     "@stryker-mutator/core": "npm:^9.6.1"
-    "@stryker-mutator/vitest-runner": "npm:^9.6.1"
+    "@stryker-mutator/vitest-runner": "npm:^10.1.1"
     "@types/graphql-depth-limit": "npm:^1.1.6"
     "@types/koa": "npm:^3.0.3"
     "@types/koa-bodyparser": "npm:^4.3.13"
