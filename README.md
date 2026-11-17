@@ -77,6 +77,9 @@ version 3. The copyright notice is below rather than in that file: GitHub's lice
 to match the FSF's text closely, and a long header on it would drop the match below the detector's threshold
 ([ADR-056](https://github.com/Axiumine/fullstack-marketplace-blueprint/blob/main/docs/devprotocol/phase3/adr/ADR-056-the-license-file-is-the-pristine-gpl-text.md)).
 
+The service itself stays GPL-3.0-or-later, and the combined work includes `@axiumine/koa-utils`, which is
+AGPL-3.0-or-later, so section 13 of the AGPL (the offer of source to network users) applies to it.
+
 marketplace logout service for <https://github.com/Axiumine/fullstack-marketplace-blueprint>
 
 Copyright (c) 2026 Giovanni Manzoni <dev@giovannimanzoni.com>

@@ -1,0 +1,10 @@
+{
+  "name": "ci-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CI-only tooling, installed with npm ci so every byte is pinned by integrity. Node 25+ no longer bundles corepack.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "corepack": "0.36.0"
+  }
+}

@@ -109,7 +109,7 @@ The `pre-push` hook lives in `.githooks/` (tracked in git). It is activated by:
 git config core.hooksPath .githooks
 ```
 
-The `prepare` script in `package.json` runs this automatically on `yarn install`, so a
+The `postinstall` script in `package.json` runs this automatically on `yarn install`, so a
 fresh clone is gated after the first install. To verify:
 
 ```bash

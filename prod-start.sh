@@ -11,7 +11,7 @@
 . ~/.profile
 . ~/.bashrc
 
-nvm use v24.18.0
+nvm use v26.13.1
 node --version
 
 yarn run start
