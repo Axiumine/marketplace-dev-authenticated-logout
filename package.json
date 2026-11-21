@@ -40,7 +40,7 @@
     "@as-integrations/koa": "^3.0.0",
     "@axiumine/koa-utils": "^9.1.0",
     "@axiumine/marketplace-common": "^4.6.0",
-    "@node-rs/bcrypt": "^1.10.7",
+    "@node-rs/bcrypt": "^2.0.0",
     "@sentry/node": "10.78.0",
     "dotenv": "^17.4.2",
     "graphql": "^16.15.0",
