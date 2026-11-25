@@ -1210,20 +1210,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@graphql-tools/utils@npm:^10.9.1 || ^11.0.0 || >=12.0.0 <12.0.2":
-  version: 12.0.1
-  resolution: "@graphql-tools/utils@npm:12.0.1"
-  dependencies:
-    "@graphql-typed-document-node/core": "npm:^3.1.1"
-    "@whatwg-node/promise-helpers": "npm:^1.0.0"
-    cross-inspect: "npm:1.0.1"
-    tslib: "npm:^2.4.0"
-  peerDependencies:
-    graphql: ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
-  checksum: 10c0/46a8878618090524241fd434c5e08d5f2885c7c8d8ec762b3828eff064f74fd446d03c1379d1bce80039e7d4f730fa9a3cfd6e005d3c70b852c712cdb6139f7a
-  languageName: node
-  linkType: hard
-
 "@graphql-tools/utils@npm:^12.0.1, @graphql-tools/utils@npm:^12.1.0":
   version: 12.1.0
   resolution: "@graphql-tools/utils@npm:12.1.0"
@@ -2984,15 +2970,6 @@ __metadata:
   version: 5.1.1
   resolution: "@vitest/spy@npm:5.1.1"
   checksum: 10c0/bcafafb7bcd975b776c41c07b89452baf1dd441aba8e4214e610722e2d927f697db46fc68b07db5434ea0883772d6378ad21668e9c694528b970e1f43cf88165
-  languageName: node
-  linkType: hard
-
-"@whatwg-node/promise-helpers@npm:^1.0.0":
-  version: 1.3.2
-  resolution: "@whatwg-node/promise-helpers@npm:1.3.2"
-  dependencies:
-    tslib: "npm:^2.6.3"
-  checksum: 10c0/d20e8d740cfa1f0eac7dce11e8a7a84f1567513a8ff0bd1772724b581a8ca77df3f9600a95047c0d2628335626113fa98367517abd01c1ff49817fccf225a29a
   languageName: node
   linkType: hard
 
@@ -6341,7 +6318,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^2.1.0, tslib@npm:^2.4.0, tslib@npm:^2.5.0, tslib@npm:^2.6.3, tslib@npm:^2.9.1":
+"tslib@npm:^2.1.0, tslib@npm:^2.4.0, tslib@npm:^2.5.0, tslib@npm:^2.9.1":
   version: 2.9.1
   resolution: "tslib@npm:2.9.1"
   checksum: 10c0/8ff46e7a4d19fa62c23483c89cf5ccc3906e742ef6e6d60bd3826b686143b300b4f6f04161cc1cf31a6b11fe70e1058ae4d4e4a108b5c68326d469684736a83c
