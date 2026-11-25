@@ -248,7 +248,7 @@ export default [
   // Neither setting this audit removed can come back by accident.
   //
   // Core `no-restricted-syntax`, in this file rather than in `@axiumine/eslint-config-be`: the shared
-  // package is a repo outside these sixteen and ships to unrelated consumers, so a Sentry-specific rule
+  // package is a repo outside these seventeen and ships to unrelated consumers, so a Sentry-specific rule
   // there would cost a publish, a version bump in ten dependents, and a rule everyone else carries for
   // nothing. One block duplicated into ten repos is the cheaper half of that trade, and it follows the
   // idiom the two blocks above already established.

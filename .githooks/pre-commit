@@ -23,7 +23,7 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 # The branch, before anything else. BCON-06, RISK_REGISTER R35.
 #
-# `main` is the checked-out branch in all sixteen repos by default, and every
+# `main` is the checked-out branch in all seventeen repos by default, and every
 # rule on this platform says to branch before the first edit of any task.
 # Nothing downstream caught the mistake until this block existed: a commit that
 # lands on `main` passes every gate here, and untangling it afterwards is the
@@ -160,7 +160,7 @@ SECRET_PATH='(^|/)(\.env(\..*)?|\.envrc|\.npmrc|\.yarnrc|\.netrc|\.pgpass|id_rsa
 # the replica-set keyfile, the CSFLE master key and now the generated Redis config, and the last of
 # those is a plain-text file with no extension and no telltale name. The directory is git-ignored, so
 # this rule only ever fires on a deliberate `git add -f` — which is exactly the case worth stopping.
-# Nothing in these sixteen repos tracks a path with that segment, so it can cost nothing else.
+# Nothing in these seventeen repos tracks a path with that segment, so it can cost nothing else.
 SECRET_PATH+='|(^|/)secrets/'
 # Yarn 4's `.yarnrc.yml` is committed on purpose (nodeLinker and the like) and so is let through by
 # path above; its content is refused instead. It is also where a registry credential would go, so the
