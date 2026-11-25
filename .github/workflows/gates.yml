@@ -6,7 +6,7 @@
 # github.com runs no hook at all — so before this file, a Dependabot pull request
 # merged with the green button reached main having passed nothing (RISK_REGISTER R63).
 # `required_status_checks` on main names the `gates` job below, which is why the job
-# id must not be renamed: the branch protection rule on all sixteen repositories
+# id must not be renamed: the branch protection rule on all seventeen repositories
 # refers to it by that exact string.
 #
 # ⚠️ YAML forbids tabs. The workspace-wide "indentation is tabs" rule is enforced by

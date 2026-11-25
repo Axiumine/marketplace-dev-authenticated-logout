@@ -30,7 +30,7 @@ why and are free to disclose it yourself.
 
 ## Scope
 
-This repository is one of sixteen that make up the marketplace platform. A finding that
+This repository is one of seventeen that make up the marketplace platform. A finding that
 crosses repositories only needs one report — say which repositories you believe are
 affected and it is triaged across all of them.
 

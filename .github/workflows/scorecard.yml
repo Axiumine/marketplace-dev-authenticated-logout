@@ -1,6 +1,6 @@
 # OpenSSF Scorecard — supply-chain posture, scored weekly and on every merge to main.
 #
-# This file is byte-identical in all sixteen repos. It is the first GitHub Actions
+# This file is byte-identical in all seventeen repos. It is the first GitHub Actions
 # workflow the platform has ever had (ADR-054); every other gate is a local git hook.
 #
 # ⚠️ YAML forbids tabs. The workspace-wide "indentation is tabs" rule is enforced by
@@ -51,7 +51,7 @@ jobs:
           results_format: sarif
           # Publishes to api.scorecard.dev, which is what serves the README badge and
           # replaces the OpenSSF team's own weekly scan of this repo. Free for public
-          # repos; all sixteen of ours are public.
+          # repos; all seventeen of ours are public.
           publish_results: true
 
       - name: Upload SARIF artifact
