@@ -168,7 +168,7 @@ SECRET_PATH+='|(^|/)secrets/'
 YARNRC_CREDENTIAL='^[[:space:]]*["'"'"']?(npmAuthToken|npmAuthIdent|npmPassword|_auth|_authToken|_password)["'"'"']?[[:space:]]*:'
 
 # Vendored secret-scanner rulesets legitimately contain example secret patterns.
-SKIP_PATH='(^|/)(semgrep/vendor|gitleaks|trufflehog|\.gitnexus)/'
+SKIP_PATH='(^|/)(semgrep/vendor|gitleaks|trufflehog)/'
 
 # High-entropy formats only. A placeholder (npm_xxxx, all-x, ${VAR}, empty) must
 # never match, or the guard gets disabled by the first false positive.
