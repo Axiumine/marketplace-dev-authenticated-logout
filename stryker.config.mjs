@@ -1,3 +1,6 @@
+import { availableParallelism } from 'node:os'
+import process from 'node:process'
+
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   testRunner: 'vitest',
@@ -29,8 +32,11 @@ export default {
    * ended on the same 6 Ignored, the same files, lines and mutators — identical sets, not equal
    * counts.
    * Re-measure that way before touching this.
+   *
+   * ⚠️ On CI, one worker per core: a GitHub-hosted `ubuntu-latest` runner has 4 vCPU, 28 workers starve it,
+   * and a starved worker is counted as a kill.
    */
-  concurrency: 28,
+  concurrency: process.env.CI ? availableParallelism() : 28,
   timeoutMS: 60000,
   // Mutation score is a push gate — see COVERAGE.md. `break` fails the run (exit 1)
   // below this score, which is what the pre-push hook keys off. Raise it as tests

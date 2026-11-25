@@ -22,6 +22,8 @@ export default defineConfig({
   plugins: [nodeNextResolver],
   resolve: { dedupe: ['graphql'] },
   test: {
+    // vitest 5 defaults clearMocks to true, which wipes calls a suite records at import time and then asserts.
+    clearMocks: false,
     include: ['test/*.test.mts'],
     server: { deps: { inline: inlineDeps } },
     // Caps how long a test's full name may be — the mutation gate selects tests by name, and past a

@@ -9,7 +9,6 @@ Tier/concern split, port table, terminology, auth model live there. Not here.
 |---|---|
 | what this svc is, its GraphQL surface, its traps | [`README.md`](./README.md) |
 | hook internals, gate order, node selection, why the mutation gate is hook-only | [`REPO.md`](./REPO.md) |
-| GitNexus rules, registry name (`marketplace-dev-authenticated-logout`) | [`AGENTS.md`](./AGENTS.md) |
 | anything cross-repo | parent `CLAUDE.md` |
 
 ## ⚠️ NEVER run the mutation gate by hand
@@ -25,12 +24,10 @@ every pull request — two callers, both automated, and a hand is neither.
 
 - **Never commit on `main`.** Branch first: `git switch -c <type>/<slug>`. Merge = user decision alone.
 - Merged → delete branch: `git branch -d <slug>`. `-d` only. `-D` never.
-- **No remote.** Push-on-request: no `git push` unless the user asked for it in that message.
+- **Push-on-request:** no `git push` unless the user asked for it in that message.
 - **Never lower a coverage or mutation threshold, and never remove a gate.** Threshold miss → write the
   missing test. Bypasses (`SKIP_QODANA=1`, `--no-verify`) are gate removals: use only when the user says so.
 - Two spaces, not tabs (ADR-058). prettier enforces it (`useTabs: false`, `tabWidth: 2`); eslint's `indent` is `['error', 2]` in the test/vitest block.
 - English only — identifiers, comments, fixtures. No exception.
 - `osv-scanner.toml` ignores GHSA-vfj7-8cjw-p6xm (braces, no patched release, dev toolchain only) until 2027-01-15 under ADR-057. The entry expires on purpose, so the failure after that date is the review: delete the entry once a patched braces exists.
 - Domain query/mutation → **resource** svc. Token lifecycle → **authorization** svc.
-- **Run `impact({target, repo})` before editing a symbol and `detect_changes()` before committing**;
-  `repo:` is mandatory and must be `marketplace-dev-authenticated-logout`.
