@@ -55,17 +55,15 @@ permissions:
 jobs:
   gates:
     name: gates
-    runs-on: ubuntu-latest
-    # ⚠️ 120, not 45, and the reason is Gate 7. The first `push: main` run of this
-    # workflow was cancelled at exactly 45 minutes in marketplace-admin,
-    # marketplace-shopowner and marketplace-user, with every gate ahead of mutation
-    # green — and an exceeded `timeout-minutes` reports as `cancelled`, never as
-    # `failure`, which reads like somebody pressed a button rather than like a budget
-    # running out. A shared runner is several times slower at Stryker than the
-    # workstation the local pre-push figures come from, and mutation is the gate
-    # ADR-055 §4 deliberately kept in CI rather than leaving hook-only. This stays a
-    # cap and not a removal: a hung job still dies, it does not run for six hours.
-    timeout-minutes: 120
+    # The organisation's own self-hosted runners, any of them (owner, 2026-11-28, ADR-061).
+    # Never a GitHub-hosted label.
+    runs-on: [self-hosted, Linux, X64]
+    # ⚠️ 360, and the reason is Gate 7. Mutation took 101 minutes in marketplace-admin and 114
+    # in marketplace-user on GitHub's runners, and the self-hosted runners are shared and differ
+    # in speed several times over. An exceeded `timeout-minutes` reports as `cancelled`, never as
+    # `failure`, which reads like somebody pressed a button rather than like a budget running
+    # out. This stays a cap and not a removal: a hung job still dies.
+    timeout-minutes: 360
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,6 +74,17 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
+
+      # The runners are persistent: what a job leaves in the runner user's home, the next job
+      # reads. Corepack, yarn and npm keep their state under RUNNER_TEMP, which the runner
+      # empties for every job, so the no-cache rule below still holds.
+      - name: Keep tool state inside the job
+        run: |
+          {
+            echo "COREPACK_HOME=$RUNNER_TEMP/corepack"
+            echo "YARN_GLOBAL_FOLDER=$RUNNER_TEMP/yarn"
+            echo "npm_config_cache=$RUNNER_TEMP/npm"
+          } >> "$GITHUB_ENV"
 
       # ⚠️ No `cache: yarn`, deliberately. This workflow runs on pull requests from
       # anywhere, and a dependency cache is state one pull request writes and the next
@@ -146,7 +155,7 @@ jobs:
 
       # The hook's trivy invocation, flag for flag. --skip-dirs .stryker-tmp is
       # load-bearing there and harmless here; the named db cache volume is not
-      # reproduced because a runner is thrown away after every job.
+      # reproduced: state shared between jobs is the one input a pull request could choose.
       - name: Gate 2 - dependency advisories (trivy)
         run: |
           docker run --rm \

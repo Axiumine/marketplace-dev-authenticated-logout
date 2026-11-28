@@ -13,9 +13,8 @@
 # ⚠️ Every `uses:` is pinned to a commit SHA, not a tag. Scorecard's own
 # Pinned-Dependencies check grades this file, and a tag is mutable.
 #
-# ⚠️ `permissions: read-all` at workflow level plus the two writes at job level is
-# not a style choice: publish_results refuses to run under a workflow that holds any
-# workflow-level write permission, and Token-Permissions grades the same shape.
+# ⚠️ `permissions: read-all` at workflow level plus the one write at job level is the
+# shape Token-Permissions grades.
 name: Scorecard supply-chain security
 
 on:
@@ -30,13 +29,12 @@ permissions: read-all
 jobs:
   analysis:
     name: Scorecard analysis
-    runs-on: ubuntu-latest
+    # The organisation's own self-hosted runners, any of them (owner, 2026-11-28, ADR-061).
+    # Never a GitHub-hosted label.
+    runs-on: [self-hosted, Linux, X64]
     permissions:
-      # Upload the SARIF to the Security tab, and required by publish_results.
+      # Upload the SARIF to the Security tab.
       security-events: write
-      # OIDC token api.scorecard.dev verifies before publishing. Needed only because
-      # publish_results is true, and only this job may hold it.
-      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,10 +46,10 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          # Publishes to api.scorecard.dev, which is what serves the README badge and
-          # replaces the OpenSSF team's own weekly scan of this repo. Free for public
-          # repos; all seventeen of ours are public.
-          publish_results: true
+          # Off: api.scorecard.dev accepts results from GitHub-hosted runners only, and this
+          # platform runs its jobs on its own (ADR-061). The score is still enforced by the
+          # floor in .githooks/pre-push, and the SARIF still reaches the Security tab.
+          publish_results: false
 
       - name: Upload SARIF artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
