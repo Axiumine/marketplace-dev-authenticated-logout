@@ -4476,10 +4476,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphql@npm:^16.15.0":
-  version: 16.15.0
-  resolution: "graphql@npm:16.15.0"
-  checksum: 10c0/b97c78a02dab6392cdc492e78290bca479b5881dbeeefaed79cc88128b0e9a810feea043da61c5cd086f1af645dc9c46d61ed5297995031d8542a11c94f7cd0f
+"graphql@npm:^17.1.0":
+  version: 17.1.0
+  resolution: "graphql@npm:17.1.0"
+  checksum: 10c0/7bebb1c13c352577c14e10accd38ce51c642bf8e7bfb474c49790c893636f8abf7d61802c47f3ce413703b0a669220c142de9aed67b3e961da3c00d005c9cfd3
   languageName: node
   linkType: hard
 
@@ -5906,7 +5906,7 @@ __metadata:
     eslint-plugin-n: "npm:^18.5.0"
     eslint-plugin-promise: "npm:^7.3.0"
     eslint-plugin-simple-import-sort: "npm:^14.0.0"
-    graphql: "npm:^16.15.0"
+    graphql: "npm:^17.1.0"
     graphql-depth-limit: "npm:^1.1.0"
     keygrip: "npm:^1.1.0"
     koa: "npm:^3.3.0"
