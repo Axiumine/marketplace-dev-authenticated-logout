@@ -43,7 +43,7 @@
     "@node-rs/bcrypt": "^1.10.7",
     "@sentry/node": "10.78.0",
     "dotenv": "^17.4.2",
-    "graphql": "^16.15.0",
+    "graphql": "^17.1.0",
     "graphql-depth-limit": "^1.1.0",
     "keygrip": "^1.1.0",
     "koa": "^3.3.0",
