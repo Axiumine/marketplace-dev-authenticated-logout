@@ -27,7 +27,9 @@ permissions: read-all
 jobs:
   analyze:
     name: Analyze JavaScript and TypeScript
-    runs-on: ubuntu-latest
+    # The organisation's own self-hosted runners, any of them (owner, 2026-11-28, ADR-061).
+    # Never a GitHub-hosted label.
+    runs-on: [self-hosted, Linux, X64]
     permissions:
       security-events: write
       contents: read
@@ -37,6 +39,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # CodeQL's TypeScript extractor runs on Node, which GitHub's images carried and the
+      # self-hosted runners do not.
+      - name: Set up node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
 
       - name: Initialise CodeQL
         uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
