@@ -2564,12 +2564,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:^26.6.6":
+"@types/node@npm:*":
   version: 26.6.6
   resolution: "@types/node@npm:26.6.6"
   dependencies:
     undici-types: "npm:~8.9.0"
   checksum: 10c0/5cb63f644f6e85a257a9cd2403cbcbe196760e2a35fd3ec9fb8b5cff663e14cc832b198cc17b53f870a2e30900ed45a1fb3f53e6589aba26b8e8c484aa672053
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^26.6.7":
+  version: 26.6.7
+  resolution: "@types/node@npm:26.6.7"
+  dependencies:
+    undici-types: "npm:~8.9.0"
+  checksum: 10c0/54ffee68394be0df0f92405b6df75a2f75041bbbd5386fb88292c5e9947800c109baafbc73cbc75957d8238a9487245e4ed57fd91c3e19bda675f3039a403b4b
   languageName: node
   linkType: hard
 
@@ -3888,9 +3897,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-n@npm:^18.5.0":
-  version: 18.5.0
-  resolution: "eslint-plugin-n@npm:18.5.0"
+"eslint-plugin-n@npm:^18.6.0":
+  version: 18.6.0
+  resolution: "eslint-plugin-n@npm:18.6.0"
   dependencies:
     "@eslint-community/eslint-utils": "npm:^4.5.0"
     enhanced-resolve: "npm:^5.17.1"
@@ -3910,7 +3919,7 @@ __metadata:
       optional: true
     typescript:
       optional: true
-  checksum: 10c0/a8174dd24bd2a1e31867125cfca342bbf601e1610c25905773e7c165581526fe01bd982c7e25c0fef6291bfbe3bab5c6450f4f59cf15c4e891c175f8d4a45050
+  checksum: 10c0/40442f23530b5db263f9d8bb9e1b763c97dafe1aa3af89075c307e924c1ce62c7c73497beb9cf8365e504ac58b6c77cf1e969d182373ef9e084f23bd3b031267
   languageName: node
   linkType: hard
 
@@ -5299,9 +5308,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mongoose@npm:^9.12.1":
-  version: 9.13.0
-  resolution: "mongoose@npm:9.13.0"
+"mongoose@npm:^9.13.1":
+  version: 9.13.1
+  resolution: "mongoose@npm:9.13.1"
   dependencies:
     "@standard-schema/spec": "npm:^1.1.0"
     kareem: "npm:3.4.1"
@@ -5310,7 +5319,7 @@ __metadata:
     mquery: "npm:6.0.1"
     ms: "npm:2.1.3"
     sift: "npm:17.1.4"
-  checksum: 10c0/d3b55b892a37ea028852b4a7e41c932f93332067847f0bedb20c21d42097927e7a3f8d600658f02c9a419d8ef0e96074b004ae2adf3ecd93e747bf431c40397d
+  checksum: 10c0/0058fdcf8649b53c6a81ea80ea2df6ec03ca6885c18ecda3dbc43c021f08139e30c42a89250425569be20e437098c9d13ea63ccd47136df4853dcc0eddae6905
   languageName: node
   linkType: hard
 
@@ -5895,7 +5904,7 @@ __metadata:
     "@types/graphql-depth-limit": "npm:^1.1.6"
     "@types/koa": "npm:^3.0.3"
     "@types/koa-bodyparser": "npm:^4.3.13"
-    "@types/node": "npm:^26.6.6"
+    "@types/node": "npm:^26.6.7"
     "@typescript-eslint/eslint-plugin": "npm:^8.72.2"
     "@typescript-eslint/parser": "npm:^8.72.2"
     "@vitest/coverage-v8": "npm:^5.1.1"
@@ -5903,7 +5912,7 @@ __metadata:
     eslint: "npm:^10.14.0"
     eslint-config-prettier: "npm:^10.1.8"
     eslint-import-resolver-typescript: "npm:^4.4.5"
-    eslint-plugin-n: "npm:^18.5.0"
+    eslint-plugin-n: "npm:^18.6.0"
     eslint-plugin-promise: "npm:^7.3.0"
     eslint-plugin-simple-import-sort: "npm:^14.0.0"
     graphql: "npm:^16.15.0"
@@ -5912,7 +5921,7 @@ __metadata:
     koa: "npm:^3.3.0"
     koa-bodyparser: "npm:^4.4.1"
     lodash: "npm:^4.18.1"
-    mongoose: "npm:^9.12.1"
+    mongoose: "npm:^9.13.1"
     prettier: "npm:^3.9.10"
     redis: "npm:^6.3.0"
     reflect-metadata: "npm:^0.2.2"
